@@ -1,0 +1,12 @@
+{
+  "name": "smoltools",
+  "version": "1.0.0",
+  "description": "A small collection of personal tools",
+  "main": "index.js",
+  "scripts": {
+    "build:bez": "cd bez && npm install && npm run build",
+    "build": "npm run build:bez"
+  },
+  "author": "Davide Ferrari",
+  "license": "ISC"
+}
