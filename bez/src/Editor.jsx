@@ -8,13 +8,13 @@ export default function Editor(props) {
     const svgRef = useRef(null);
     const containerRef = useRef(null);
     const overlayRef = useRef(null);
-    
+
     const image = useRef(new Image());
     const canvas = document.createElement('canvas');
 
 
     const ctxRef = useRef(canvas.getContext('2d'));
-    
+
 
     const [gradient, setGradient] = useState(null);
     const [samples, setSamples] = useState(50);
@@ -27,13 +27,8 @@ export default function Editor(props) {
 
     const points = useRef(null);
     const selected = useRef(null);
-   
-    const line = d3.line().curve(d3.curveNatural);
 
-
-
-
-
+    const line = d3.line().curve(d3.curveCatmullRom);
 
     function update() {
         svgRef.current.select("path").attr("d", line);
@@ -59,30 +54,37 @@ export default function Editor(props) {
         circle.exit().remove();
 
         getGradient();
-
-
     }
 
     function getGradient() {
         if (!overlayRef.current) return;
         if (points.current.length < 2) return;
-        console.log(points.current.length)
         const p = samplePath(svgRef.current.select("path").node(), samplesRef.current);
 
+        const samplePoints = svgRef.current.selectAll(".sample-point")
+            .data(p, (d, i) => i);
 
-        
+        samplePoints.enter().append("circle")
+            .attr('pointer-events', 'none')
+            .attr("class", "sample-point")
+            .attr("r", 3)
+            .attr("fill", "red")
+            .merge(samplePoints)
+            .attr("cx", d => d[0])
+            .attr("cy", d => d[1]);
+
+        samplePoints.exit().remove();
+
         const pxMap = p.map((v, i) => {
-            const x = mapRange(v[0], 0, overlayRef.current.offsetWidth, 0, image.current.width); // Replace with your x coordinate
-            const y = mapRange(v[1], 0, overlayRef.current.offsetHeight, 0, image.current.height); // Replace with your y coordinate
-            
+            const x = mapRange(v[0], 0, overlayRef.current.offsetWidth, 0, image.current.width);
+            const y = mapRange(v[1], 0, overlayRef.current.offsetHeight, 0, image.current.height);
+
             const pixelData = ctxRef.current.getImageData(x, y, 1, 1).data;
             const r = pixelData[0];
             const g = pixelData[1];
             const b = pixelData[2];
             return [r, g, b];
         });
-        
-        
 
         setGradient(createLinearGradient(pxMap));
     }
@@ -100,7 +102,7 @@ export default function Editor(props) {
 
     function keydown(event) {
         if (!selected.current) return;
-        
+
         switch (event.key) {
             case "Backspace":
             case "Delete": {
@@ -123,10 +125,9 @@ export default function Editor(props) {
         return subject;
     }
 
-
-    useEffect(() => {
+    function setupCurve() {
         if (svgRef.current) return;
-        points.current = d3.range(1, 5).map(i => [i * 200 / 5, 50 + Math.random() * (500 - 100)])
+        points.current = d3.range(1, 5).map(i => [i * overlayRef.current.clientWidth / 7, 50 + Math.random() * (500 - 100)])
         selected.current = points.current[0];
         svgRef.current = d3.create('svg').attr('tabindex', 1)
             .style('position', 'absolute')
@@ -138,7 +139,7 @@ export default function Editor(props) {
                 .on("start", dragstarted)
                 .on("drag", dragged));
 
-                svgRef.current.append("path")
+        svgRef.current.append("path")
             .datum(points.current)
             .attr("fill", "none")
             .attr("stroke", "black")
@@ -147,11 +148,11 @@ export default function Editor(props) {
 
         d3.select(window)
             .on("keydown", keydown);
-        
+
         overlayRef.current.append(svgRef.current.node());
+    }
 
-    }, []);
-
+    
     useEffect(() => {
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -163,13 +164,14 @@ export default function Editor(props) {
             };
             image.current.src = e.target.result;
             setOverlaySize();
+            setupCurve();
         };
 
         reader.readAsDataURL(props.file);
     }, []);
 
 
-    
+
 
     useEffect(() => {
         const resizeObserver = new ResizeObserver(entries => {
@@ -233,7 +235,27 @@ export default function Editor(props) {
 
     function handleSamplesChange(event) {
         setSamples(event.target.value);
-        getGradient();
+        samplesRef.current = event.target.value;
+        update();
+    }
+
+    function copyGradient() {
+        navigator.clipboard.writeText(gradient);
+    }
+
+    function copyRGBArray() {
+        const pxMap = samplePath(svgRef.current.select("path").node(), samplesRef.current).map((v, i) => {
+            const x = mapRange(v[0], 0, overlayRef.current.offsetWidth, 0, image.current.width);
+            const y = mapRange(v[1], 0, overlayRef.current.offsetHeight, 0, image.current.height);
+
+            const pixelData = ctxRef.current.getImageData(x, y, 1, 1).data;
+            const r = pixelData[0];
+            const g = pixelData[1];
+            const b = pixelData[2];
+            return [r, g, b];
+        });
+
+        navigator.clipboard.writeText(JSON.stringify(pxMap));
     }
 
     return (
@@ -244,10 +266,20 @@ export default function Editor(props) {
                 </img>
                 <div className='overlay' ref={overlayRef}></div>
             </div>
-            <div className='barContainer' style={{background: gradient}}>
-                <input type="number" min="2" max="200" value={samples} onChange={handleSamplesChange} />
-                <button>{samples}</button>
-
+            <div className='barContainer'>
+                <fieldset className='gradient'>
+                    <legend>Gradient</legend>
+                    <div style={{ background: gradient, height: "100%" }}></div>
+                </fieldset>
+                <fieldset>
+                    <legend>Controls</legend>
+                    <div className='controls'>
+                        <label># of samples:</label>
+                        <input type="number" min="2" value={samples} onChange={handleSamplesChange} />
+                        <button onClick={copyGradient}>Copy as CSS linear-gradient</button>
+                        <button onClick={copyRGBArray}>Copy as array of RGB values</button>
+                    </div>
+                </fieldset>
             </div>
         </div>);
 }
