@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SVG Cropper</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      .card {
+        padding: 1.5rem;
+      }
+      .dropzone {
+        position: relative;
+        cursor: pointer;
+        border: 2px dashed #cfd8dc;
+        border-radius: 0.75rem;
+        background: #eceff1;
+        transition: background 0.2s, border-color 0.2s;
+      }
+      .dropzone:hover {
+        background: #fff;
+        border-color: #90a4ae;
+      }
+      .dropzone.dragover {
+        background: #e0f7fa;
+        border-color: #00acc1;
+      }
+      .dropzone svg {
+        color: #607d8b;
+      }
+      #canvas,
+      #preview {
+        position: relative;
+        width: 100%;
+        max-width: 600px;
+        height: 300px;
+        background: #eceff1;
+        border-radius: 0.75rem;
+        overflow: hidden;
+        margin: auto;
+      }
+      #canvas svg,
+      #preview svg {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+      #sel {
+        position: absolute;
+        border: 2px dashed #00acc1;
+        background: rgba(0, 172, 193, 0.2);
+        pointer-events: none;
+        display: none;
+      }
+      .btn {
+        padding: 0.5rem 1rem;
+        border-radius: 0.5rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .btn-primary {
+        background: #00acc1;
+        color: #fff;
+      }
+      .btn-secondary {
+        background: #9e9e9e;
+        color: #fff;
+      }
+      .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+    </style>
+  </head>
+  <body class="min-h-screen flex flex-col items-center py-8">
+    <div class="card w-full max-w-3xl">
+      <h1 class="text-3xl font-bold text-center mb-4">SVG Cropper</h1>
+      <p class="text-center text-gray-600 mb-6">
+        Upload your SVG, select a region, and export.
+      </p>
+
+      <!-- Upload Dropzone -->
+      <div
+        id="dropzone"
+        class="dropzone flex flex-col items-center justify-center py-12 mb-6"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          class="h-12 w-12 mb-2"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M12 4v16m8-8H4"
+          />
+        </svg>
+        <span class="text-gray-700"
+          >Drop SVG or
+          <span class="text-blue-600 underline">Browse</span></span
+        >
+        <input
+          id="file"
+          type="file"
+          accept="image/svg+xml"
+          class="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+        />
+      </div>
+
+      <!-- Cropping Canvas -->
+      <section id="crop-ui" class="hidden mb-6 text-center">
+        <div id="canvas">
+          <div id="sel"></div>
+        </div>
+        <p class="text-gray-500 mt-2">Drag to select crop region</p>
+      </section>
+
+      <!-- Action Buttons -->
+      <div id="actions" class="hidden flex flex-wrap justify-center gap-4 mb-6">
+        <button id="crop" class="btn btn-primary" disabled>Crop</button>
+        <button id="removeBg" class="btn btn-secondary" disabled>
+          Remove BG
+        </button>
+        <button id="copy" class="btn btn-secondary" disabled>Copy</button>
+        <button id="save" class="btn btn-primary" disabled>Download</button>
+      </div>
+
+      <!-- Preview Container -->
+      <section id="preview-box" class="hidden">
+        <h2 class="text-xl font-semibold text-center mb-3">Preview</h2>
+        <div id="preview"></div>
+      </section>
+    </div>
+
+    <script>
+      "use strict";
+      const $ = (id) => document.getElementById(id);
+      const msg = (text, type = "info") => {
+        const c = {
+          info: ["bg-blue-50", "text-blue-700"],
+          ok: ["bg-green-50", "text-green-700"],
+          error: ["bg-red-50", "text-red-700"],
+        };
+        const el = $("msg");
+        el.textContent = text;
+        el.className = `text-center text-sm font-medium rounded-lg py-2 mb-6 ${c[
+          type
+        ].join(" ")}`;
+      };
+
+      const state = { raw: "", crop: "", fileName: "cropped.svg", box: null };
+      const cvs = $("canvas"),
+        sel = $("sel");
+      const btn = {
+        crop: $("crop"),
+        removeBg: $("removeBg"),
+        copy: $("copy"),
+        save: $("save"),
+      };
+
+
+      const fileInput = $("file");
+      const dropzone = $("dropzone");
+      fileInput.addEventListener("change", (e) =>
+        handleFile(e.target.files[0])
+      );
+      dropzone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        dropzone.classList.add("dragover");
+      });
+      dropzone.addEventListener("dragleave", () =>
+        dropzone.classList.remove("dragover")
+      );
+      dropzone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        dropzone.classList.remove("dragover");
+        handleFile(e.dataTransfer.files[0]);
+      });
+
+      function handleFile(file) {
+        if (!file || file.type !== "image/svg+xml") {
+          msg("Invalid file type. SVG only.", "error");
+          return;
+        }
+        state.fileName = file.name.replace(/\.svg$/i, "_cropped.svg");
+        const reader = new FileReader();
+        reader.onload = () => loadSvg(reader.result);
+        reader.onerror = () => msg("File read error.", "error");
+        reader.readAsText(file);
+      }
+
+      function loadSvg(text) {
+        try {
+          const doc = new DOMParser().parseFromString(text, "image/svg+xml");
+          const svg = doc.documentElement;
+          if (svg.tagName !== "svg" || doc.querySelector("parsererror"))
+            throw new Error("Invalid SVG");
+          state.raw = text;
+          state.box = parseViewBox(svg);
+          cvs.innerHTML = "";
+          cvs.appendChild(svg);
+          cvs.appendChild(sel);
+          $("crop-ui").classList.remove("hidden");
+          $("actions").classList.remove("hidden");
+          btn.crop.disabled = false;
+          btn.removeBg.disabled = false;
+        } catch (err) {
+          console.error(err);
+          msg(err.message, "error");
+        }
+      }
+
+      function parseViewBox(svg) {
+        const vb = svg.getAttribute("viewBox");
+        if (vb) {
+          const [x, y, w, h] = vb.split(/[\s,]+/).map(Number);
+          return { x, y, w, h };
+        }
+        const w = parseFloat(svg.getAttribute("width"));
+        const h = parseFloat(svg.getAttribute("height"));
+        if (w > 0 && h > 0) return { x: 0, y: 0, w, h };
+        throw new Error("SVG requires viewBox or width/height");
+      }
+
+      let dragging = false,
+        startPos = { x: 0, y: 0 };
+      function pos(e) {
+        const r = cvs.getBoundingClientRect();
+        return {
+          x: Math.max(0, Math.min(e.clientX - r.left, r.width)),
+          y: Math.max(0, Math.min(e.clientY - r.top, r.height)),
+        };
+      }
+
+      cvs.addEventListener("pointerdown", (e) => {
+        if (!state.raw) return;
+        dragging = true;
+        startPos = pos(e);
+        Object.assign(sel.style, {
+          left: `${startPos.x}px`,
+          top: `${startPos.y}px`,
+          width: "0px",
+          height: "0px",
+          display: "block",
+        });
+        cvs.setPointerCapture(e.pointerId);
+      });
+      cvs.addEventListener("pointermove", (e) => {
+        if (!dragging) return;
+        const p = pos(e);
+        const x = Math.min(startPos.x, p.x);
+        const y = Math.min(startPos.y, p.y);
+        const w = Math.abs(startPos.x - p.x);
+        const h = Math.abs(startPos.y - p.y);
+        Object.assign(sel.style, {
+          left: `${x}px`,
+          top: `${y}px`,
+          width: `${w}px`,
+          height: `${h}px`,
+        });
+      });
+      const endSel = () => {
+        if (!dragging) return;
+        dragging = false;
+        const w = parseFloat(sel.style.width);
+        const h = parseFloat(sel.style.height);
+        if (w > 5 && h > 5) msg("Selection ready.", "info");
+        else {
+          sel.style.display = "none";
+          msg("Selection too small.", "info");
+        }
+      };
+      cvs.addEventListener("pointerup", endSel);
+      cvs.addEventListener("pointercancel", endSel);
+
+      btn.crop.onclick = () => {
+        try {
+          const { x, y, w: vbw, h: vbh } = state.box;
+          const cw = cvs.clientWidth,
+            ch = cvs.clientHeight,
+            asp = vbw / vbh;
+          let contW, contH, offX, offY;
+          if (cw / ch > asp) {
+            contH = ch;
+            contW = asp * ch;
+            offX = (cw - contW) / 2;
+            offY = 0;
+          } else {
+            contW = cw;
+            contH = cw / asp;
+            offX = 0;
+            offY = (ch - contH) / 2;
+          }
+          const selL = parseFloat(sel.style.left) - offX;
+          const selT = parseFloat(sel.style.top) - offY;
+          const selW = parseFloat(sel.style.width);
+          const selH = parseFloat(sel.style.height);
+          const rx = Math.max(0, Math.min(selL, contW));
+          const ry = Math.max(0, Math.min(selT, contH));
+          const rw = Math.min(selW, contW - rx);
+          const rh = Math.min(selH, contH - ry);
+          if (rw <= 0 || rh <= 0) throw new Error("Invalid crop region");
+          const newVb = [
+            x + rx * (vbw / contW),
+            y + ry * (vbh / contH),
+            rw * (vbw / contW),
+            rh * (vbh / contH),
+          ];
+          const doc = new DOMParser().parseFromString(
+            state.raw,
+            "image/svg+xml"
+          );
+          const svg = doc.documentElement;
+          svg.setAttribute("viewBox", newVb.join(" "));
+          svg.removeAttribute("width");
+          svg.removeAttribute("height");
+          state.crop = new XMLSerializer().serializeToString(svg);
+          showPreview();
+          msg("Cropped.", "ok");
+        } catch (err) {
+          console.error(err);
+          msg(err.message, "error");
+        }
+      };
+
+      btn.removeBg.onclick = () => {
+        try {
+          const src = state.crop || state.raw;
+          const doc = new DOMParser().parseFromString(src, "image/svg+xml");
+          const svg = doc.documentElement;
+          svg.querySelectorAll("rect").forEach((r) => {
+            const f = (r.getAttribute("fill") || "").toLowerCase().trim();
+            if (["white", "#fff", "rgb(255,255,255)"].includes(f)) r.remove();
+          });
+          svg.querySelectorAll("image").forEach((img) => img.remove());
+          state.crop = new XMLSerializer().serializeToString(svg);
+          showPreview();
+        } catch (err) {
+          console.error(err);
+          msg(err.message, "error");
+        }
+      };
+
+      function showPreview() {
+        $("preview").innerHTML = state.crop;
+        $("preview-box").classList.remove("hidden");
+        btn.copy.disabled = btn.save.disabled = false;
+      }
+
+      btn.copy.onclick = () =>
+        navigator.clipboard
+          .writeText(state.crop)
+          .then(() => msg("Copied.", "ok"))
+          .catch(() => {
+            const ta = document.createElement("textarea");
+            ta.value = state.crop;
+            ta.style.position = "fixed";
+            ta.style.opacity = 0;
+            document.body.append(ta);
+            ta.select();
+            document.execCommand("copy")
+              ? msg("Copied", "ok")
+              : msg("Copy failed", "error");
+            ta.remove();
+          });
+
+      btn.save.onclick = () => {
+        const blob = new Blob([state.crop], { type: "image/svg+xml" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = state.fileName;
+        document.body.append(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        msg("Download started.", "ok");
+      };
+    </script>
+  </body>
+</html>

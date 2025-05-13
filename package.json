@@ -5,8 +5,12 @@
   "main": "index.js",
   "scripts": {
     "build:bez": "cd bez && npm install && npm run build",
-    "build": "npm run build:bez"
+    "build:svg-cropper": "copyfiles -u 1 \"svg-cropper/**/*\" dist/svg-cropper -V",
+    "build": "npm run build:bez && npm run build:svg-cropper"
   },
   "author": "Davide Ferrari",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "copyfiles": "^2.4.1"
+  }
 }
