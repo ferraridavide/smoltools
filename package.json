@@ -6,7 +6,8 @@
   "scripts": {
     "build:bez": "cd bez && npm install && npm run build",
     "build:svg-cropper": "copyfiles -u 1 \"svg-cropper/**/*\" dist/svg-cropper -V",
-    "build": "npm run build:bez && npm run build:svg-cropper"
+    "build:jsongraph": "copyfiles -u 1 \"jsongraph/**/*\" dist/jsongraph -V",
+    "build": "npm run build:bez && npm run build:svg-cropper && npm run build:jsongraph"
   },
   "author": "Davide Ferrari",
   "license": "ISC",
