@@ -30,3 +30,4 @@ yarn-error.log*
 # Cache
 .cache
 .npm
+package-lock.json
