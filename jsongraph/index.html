@@ -1,226 +1,444 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>jsongraph</title>
-    <meta name="description" content="The tool analyzes a given JSON object to infer its underlying data schema and visualizes this schema as a directed graph">
-    <meta property="og:type" content="website">
-    <meta property="og:title" content="jsongraph">
-    <meta property="og:description" content="The tool analyzes a given JSON object to infer its underlying data schema and visualizes this schema as a directed graph">
-    <meta property="twitter:card" content="summary_large_image">
-    <meta property="twitter:title" content="jsongraph">
-    <meta property="twitter:description" content="The tool analyzes a given JSON object to infer its underlying data schema and visualizes this schema as a directed graph">
+    <title>JSONGraph - Schema Visualizer</title>
+    <meta name="description"
+        content="Analyze JSON objects to infer data schemas and visualize them as interactive directed graphs">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔗</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.34.1/min/vs/loader.js"></script>
     <style>
-        body, html {
+        :root {
+            --bg-primary: #0a0a0b;
+            --bg-secondary: #141416;
+            --bg-tertiary: #1c1c1f;
+            --bg-elevated: #232326;
+            --border-subtle: rgba(255, 255, 255, 0.08);
+            --border-default: rgba(255, 255, 255, 0.12);
+            --text-primary: #fafafa;
+            --text-secondary: #a1a1a6;
+            --text-muted: #6b6b70;
+            --accent-primary: #6366f1;
+            --accent-secondary: #818cf8;
+            --accent-glow: rgba(99, 102, 241, 0.3);
+            --success: #10b981;
+            --warning: #f59e0b;
+            --error: #ef4444;
+            --node-root: #f59e0b;
+            --node-interface: #10b981;
+            --node-property: #6366f1;
+            --node-keys: #f59e0b;
+        }
+
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+        }
+
+        body,
+        html {
             margin: 0;
             padding: 0;
-            font-family: sans-serif;
+            font-family: 'Inter', system-ui, sans-serif;
             height: 100vh;
-            overflow: hidden; 
+            overflow: hidden;
+            background: var(--bg-primary);
+            color: var(--text-primary);
         }
-        .container {
-            display: flex;
-            height: 100%;
-            width: 100%; 
-        }
-        .pane {
-            height: 100%;
-            box-sizing: border-box;
-            overflow: auto; 
-            position: relative; 
-        }
-        #input-pane {
-            
-            min-width: 200px; 
+
+        .app {
             display: flex;
             flex-direction: column;
+            height: 100vh;
         }
-        #splitter {
-            width: 5px;
-            background-color: #ccc;
-            cursor: col-resize;
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem 1.25rem;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .logo-icon {
+            font-size: 1.5rem;
+        }
+
+        .logo-text {
+            font-size: 1.25rem;
+            font-weight: 600;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header-subtitle {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+
+        .container {
+            display: flex;
+            flex: 1;
+            min-height: 0;
+        }
+
+        .pane {
             height: 100%;
+            position: relative;
+            overflow: hidden;
         }
-        #graph-pane {
-            
-            flex-grow: 1; 
-            min-width: 300px; 
-            position: relative; 
-            display: flex; 
-            flex-direction: column; 
+
+        #input-pane {
+            width: 400px;
+            min-width: 250px;
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border-subtle);
         }
-        textarea {
-            width: 98%;
-            flex-grow: 1; 
-            margin-bottom: 10px;
-            font-family: monospace;
-            font-size: 12px;
+
+        .editor-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border-subtle);
         }
-        #editor-container { 
-            width: calc(100% - 2px); 
-            flex-grow: 1;
-            border: 1px solid #ccc; 
+
+        .editor-title {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
         }
-        button {
-            padding: 10px;
-            margin: 10px;
-            background-color: #007bff;
-            color: white;
+
+        #editor-container {
+            flex: 1;
+            min-height: 0;
+        }
+
+        .btn {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--accent-primary);
             border: none;
+            border-radius: 0.5rem;
+            color: white;
+            font-size: 0.875rem;
+            font-weight: 500;
             cursor: pointer;
+            transition: all 0.2s;
         }
-        button:hover {
-            background-color: #0056b3;
+
+        .btn:hover {
+            background: var(--accent-secondary);
+            box-shadow: 0 0 20px var(--accent-glow);
         }
+
+        .btn-secondary {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-default);
+            color: var(--text-secondary);
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            box-shadow: none;
+        }
+
+        .editor-actions {
+            padding: 0.75rem 1rem;
+            border-top: 1px solid var(--border-subtle);
+        }
+
+        #splitter {
+            width: 4px;
+            background: var(--bg-tertiary);
+            cursor: col-resize;
+            transition: background 0.2s;
+        }
+
+        #splitter:hover {
+            background: var(--accent-primary);
+        }
+
+        #graph-pane {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 300px;
+        }
+
+        #graph-area-wrapper {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            min-height: 100px;
+            background: var(--bg-primary);
+        }
+
         #graph-svg {
             width: 100%;
             height: 100%;
         }
-        .node {
-            cursor: grab;
-        }
-        .node-group text {
-            font-size: 10px;
-            pointer-events: none; 
-            text-anchor: middle;
-            dominant-baseline: central;
-        }
-        .link {
-            stroke: #999;
-            stroke-opacity: 0.6;
-        }
-        .link-label {
-            font-size: 9px;
-            fill: #555;
-            text-anchor: middle;
-            dominant-baseline: central;
-            paint-order: stroke; 
-            stroke: white;
-            stroke-width: 2px;
-            stroke-linecap: butt;
-            stroke-linejoin: miter;
-        }
-        .node.selected { 
-            stroke: #ffeb3b; 
-            stroke-width: 3px;
-        }
-        .node-group.selected text { 
-            font-weight: bold;
-        }
-        #status {
-            margin-top: 10px;
-            color: red;
-        }
+
         #gui-container {
             position: absolute;
-            top: 10px;
-            right: 10px;
-            z-index: 10; 
+            top: 1rem;
+            right: 1rem;
+            z-index: 10;
         }
-        #detail-view {
-            background-color: rgba(245, 245, 245, 0.95); 
-            border-top: 1px solid #ccc; 
-            padding: 10px;
-            box-sizing: border-box;
-            overflow-y: auto;
-            z-index: 5; 
-            font-size: 0.9em;
-            flex-shrink: 0; 
-            height: 150px; 
-            min-height: 50px; 
+
+        #gui-container .lil-gui {
+            --background-color: var(--bg-secondary);
+            --text-color: var(--text-primary);
+            --title-background-color: var(--bg-tertiary);
+            --widget-color: var(--bg-elevated);
+            --hover-color: var(--accent-primary);
+            --focus-color: var(--accent-primary);
+            --number-color: var(--accent-secondary);
+            --string-color: var(--success);
         }
-        #detail-view h4 {
-            margin-top: 0;
-            margin-bottom: 5px;
-        }
-        #detail-view p {
-            margin: 2px 0;
-        }
-        #detail-view pre {
-            background-color: rgba(255, 255, 255, 0.8);
-            padding: 5px;
-            border-radius: 3px;
-            font-size: 0.85em;
-            max-height: 60px; 
-            overflow-y: auto;
-        }
-        
-        #graph-area-wrapper {
-            flex-grow: 1; 
-            position: relative; 
-            overflow: hidden; 
-            min-height: 100px; 
-        }
-        #horizontal-splitter-graph-detail {
-            height: 5px;
-            background-color: #ccc;
+
+        #horizontal-splitter {
+            height: 4px;
+            background: var(--bg-tertiary);
             cursor: row-resize;
-            flex-shrink: 0; 
+            transition: background 0.2s;
+        }
+
+        #horizontal-splitter:hover {
+            background: var(--accent-primary);
+        }
+
+        #detail-view {
+            background: var(--bg-secondary);
+            padding: 1rem;
+            height: 180px;
+            min-height: 80px;
+            overflow-y: auto;
+            font-size: 0.875rem;
+        }
+
+        #detail-view h4 {
+            margin: 0 0 0.75rem 0;
+            font-size: 0.875rem;
+            color: var(--accent-secondary);
+        }
+
+        #detail-view p {
+            margin: 0.25rem 0;
+            color: var(--text-secondary);
+        }
+
+        #detail-view strong {
+            color: var(--text-primary);
+        }
+
+        #detail-view pre {
+            background: var(--bg-tertiary);
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            max-height: 80px;
+            overflow-y: auto;
+            color: var(--text-primary);
+            margin: 0.5rem 0 0 0;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .empty-state {
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        .node {
+            cursor: grab;
+            transition: filter 0.2s;
+        }
+
+        .node:hover {
+            filter: brightness(1.2);
+        }
+
+        .node.selected {
+            stroke: var(--accent-secondary) !important;
+            stroke-width: 3px !important;
+        }
+
+        .node-group text {
+            font-size: 11px;
+            font-family: 'Inter', sans-serif;
+            font-weight: 500;
+            pointer-events: none;
+            text-anchor: middle;
+            dominant-baseline: central;
+            fill: white;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+        }
+
+        .link {
+            stroke: var(--text-muted);
+            stroke-opacity: 0.4;
+        }
+
+        .link-label {
+            font-size: 10px;
+            fill: var(--text-secondary);
+            text-anchor: middle;
+            dominant-baseline: central;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .legend {
+            position: absolute;
+            bottom: 1rem;
+            left: 1rem;
+            display: flex;
+            gap: 1rem;
+            padding: 0.75rem 1rem;
+            background: var(--bg-secondary);
+            border-radius: 0.5rem;
+            border: 1px solid var(--border-subtle);
+            font-size: 0.75rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text-secondary);
+        }
+
+        .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-secondary);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--bg-elevated);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--border-default);
         }
     </style>
 </head>
+
 <body>
-    <div class="container">
-        <div id="input-pane" class="pane">
-            <div id="editor-container"></div>
-            <button id="generate-graph">Generate Graph</button>
-        </div>
-        <div id="splitter"></div>
-        <div id="graph-pane" class="pane">
-            <div id="graph-area-wrapper">
-                <div id="gui-container"></div>
-                <svg id="graph-svg"></svg>
+    <div class="app">
+        <header class="header">
+            <div class="logo">
+                <span class="logo-icon">🔗</span>
+                <span class="logo-text">JSONGraph</span>
             </div>
-            <div id="horizontal-splitter-graph-detail"></div>
-            <div id="detail-view"><span>No node selected.</span></div>
+            <span class="header-subtitle">Schema Visualizer</span>
+        </header>
+        <div class="container">
+            <div id="input-pane" class="pane">
+                <div class="editor-header">
+                    <span class="editor-title">JSON Input</span>
+                </div>
+                <div id="editor-container"></div>
+                <div class="editor-actions">
+                    <button id="generate-graph" class="btn" style="width:100%">
+                        <span>⚡</span>
+                        <span>Generate Graph</span>
+                    </button>
+                </div>
+            </div>
+            <div id="splitter"></div>
+            <div id="graph-pane" class="pane">
+                <div id="graph-area-wrapper">
+                    <div id="gui-container"></div>
+                    <svg id="graph-svg"></svg>
+                    <div class="legend">
+                        <div class="legend-item">
+                            <div class="legend-dot" style="background:var(--node-root)"></div>Root
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-dot" style="background:var(--node-interface)"></div>Interface
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-dot" style="background:var(--node-property)"></div>Property
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-dot" style="background:var(--node-keys)"></div>Keys
+                        </div>
+                        <div class="legend-item"
+                            style="border-left: 1px solid var(--border-default); padding-left: 1rem; margin-left: 0.5rem;">
+                            <span style="opacity: 0.7">Double-click to unpin • Ctrl+Enter to generate</span>
+                        </div>
+                    </div>
+                </div>
+                <div id="horizontal-splitter"></div>
+                <div id="detail-view"><span class="empty-state">Click a node to view details</span></div>
+            </div>
         </div>
     </div>
 
     <script type="module">
         import GUI from 'https://cdn.jsdelivr.net/npm/lil-gui@0.20/+esm';
+
         const inputDataExample = {
-            "main_settings": {
-                "group_alpha": { "detail_1": "alpha_d1", "detail_2": 1, "optional_alpha": true },
-                "group_beta":  { "detail_1": "beta_d1",  "detail_2": 2 },
-                "primitive_field_in_parent": "parent_value",
-                "list_of_primitives": [1,2,3],
-                "list_of_objects": [ {"id": 1, "val": "a"}, {"id":2, "val": "b"}]
+            "users": [
+                { "id": 1, "name": "Alice", "email": "alice@example.com", "role": "admin" },
+                { "id": 2, "name": "Bob", "email": "bob@example.com", "role": "user" }
+            ],
+            "settings": {
+                "theme": "dark",
+                "notifications": { "email": true, "push": false },
+                "language": "en"
             },
-            "some_other_config": {
-                "config_name": "cfg_1",
-                "config_value": 10.5
-            },
-            "isolated_group": {
-                "isolated_data_holder": {"iso_field": "data_val"}
-            },
-            "another_isolated_primitive_interface": {
-                "field_x": "value_x"
-            },
-            "empty_obj_holder": { "empty_one": {} }
+            "metadata": {
+                "version": "1.0.0",
+                "lastUpdated": "2024-01-15"
+            }
         };
 
-        const statusDiv = document.getElementById('status');
-
-        function getShapeKey(keysSet) { 
-            return Array.from(keysSet).sort().join(',');
-        }
+        function getShapeKey(keysSet) { return Array.from(keysSet).sort().join(','); }
 
         function get_all_unique_shapes_recursive_js(data, shapes_set) {
             if (typeof data === 'object' && data !== null && !Array.isArray(data)) {
                 const current_keys = Object.keys(data);
-                if (current_keys.length > 0) {
-                    shapes_set.add(new Set(current_keys));
-                }
-                for (const value of Object.values(data)) {
-                    get_all_unique_shapes_recursive_js(value, shapes_set);
-                }
+                if (current_keys.length > 0) shapes_set.add(new Set(current_keys));
+                for (const value of Object.values(data)) get_all_unique_shapes_recursive_js(value, shapes_set);
             } else if (Array.isArray(data)) {
-                for (const item of data) {
-                    get_all_unique_shapes_recursive_js(item, shapes_set);
-                }
+                for (const item of data) get_all_unique_shapes_recursive_js(item, shapes_set);
             }
         }
 
@@ -230,7 +448,6 @@
                 all_discovered_shapes_sets.add(new Set(Object.keys(data)));
             }
             get_all_unique_shapes_recursive_js(data, all_discovered_shapes_sets);
-
             const all_discovered_shapes = Array.from(all_discovered_shapes_sets);
             let maximal_shapes = [];
             for (const s1 of all_discovered_shapes) {
@@ -238,28 +455,16 @@
                 for (const s2 of all_discovered_shapes) {
                     if (s1 === s2) continue;
                     let s1_is_subset_s2 = true;
-                    for (const item of s1) {
-                        if (!s2.has(item)) {
-                            s1_is_subset_s2 = false;
-                            break;
-                        }
-                    }
-                    if (s1_is_subset_s2 && s1.size < s2.size) {
-                        is_maximal = false;
-                        break;
-                    }
+                    for (const item of s1) { if (!s2.has(item)) { s1_is_subset_s2 = false; break; } }
+                    if (s1_is_subset_s2 && s1.size < s2.size) { is_maximal = false; break; }
                 }
-                if (is_maximal) {
-                    maximal_shapes.push(s1);
-                }
+                if (is_maximal) maximal_shapes.push(s1);
             }
-            
             maximal_shapes.sort((fsA, fsB) => {
                 const a = Array.from(fsA).sort().join(',');
                 const b = Array.from(fsB).sort().join(',');
                 return a.localeCompare(b);
             });
-
             const id_to_final_shape_map = {};
             const final_shape_to_id_map = new Map();
             maximal_shapes.forEach((shape_keys_set, i) => {
@@ -267,29 +472,20 @@
                 id_to_final_shape_map[interface_id] = shape_keys_set;
                 final_shape_to_id_map.set(getShapeKey(shape_keys_set), interface_id);
             });
-
             const shape_to_final_id_map = new Map();
             for (const original_shape_set of all_discovered_shapes) {
                 let best_fit_maximal_shape_set = null;
                 let min_extra_keys = Infinity;
                 for (const maximal_s_set of maximal_shapes) {
                     let is_subset = true;
-                    for (const item of original_shape_set) {
-                        if (!maximal_s_set.has(item)) {
-                            is_subset = false;
-                            break;
-                        }
-                    }
+                    for (const item of original_shape_set) { if (!maximal_s_set.has(item)) { is_subset = false; break; } }
                     if (is_subset) {
                         const extra_keys_count = maximal_s_set.size - original_shape_set.size;
                         if (extra_keys_count < min_extra_keys) {
                             min_extra_keys = extra_keys_count;
                             best_fit_maximal_shape_set = maximal_s_set;
-                        } else if (extra_keys_count === min_extra_keys) {
-                            if (best_fit_maximal_shape_set && 
-                                getShapeKey(maximal_s_set) < getShapeKey(best_fit_maximal_shape_set)) {
-                                best_fit_maximal_shape_set = maximal_s_set;
-                            }
+                        } else if (extra_keys_count === min_extra_keys && best_fit_maximal_shape_set && getShapeKey(maximal_s_set) < getShapeKey(best_fit_maximal_shape_set)) {
+                            best_fit_maximal_shape_set = maximal_s_set;
                         }
                     }
                 }
@@ -304,9 +500,7 @@
             const all_values = {};
             for (const final_id in id_to_final_shape_map) {
                 all_values[final_id] = {};
-                for (const key of id_to_final_shape_map[final_id]) {
-                    all_values[final_id][key] = new Set();
-                }
+                for (const key of id_to_final_shape_map[final_id]) all_values[final_id][key] = new Set();
             }
             function _find_instances_and_collect(current_item) {
                 if (typeof current_item === 'object' && current_item !== null && !Array.isArray(current_item)) {
@@ -320,17 +514,8 @@
                                     if (typeof field_value !== 'object' || field_value === null) {
                                         all_values[final_interface_id][field_key].add(field_value);
                                     } else if (Array.isArray(field_value)) {
-                                        let is_list_of_primitives = true;
-                                        if (field_value.length > 0) {
-                                            for (const elem of field_value) {
-                                                if (typeof elem === 'object' && elem !== null) {
-                                                    is_list_of_primitives = false; break;
-                                                }
-                                            }
-                                        }
-                                        if (is_list_of_primitives) {
-                                            for (const elem of field_value) all_values[final_interface_id][field_key].add(elem);
-                                        }
+                                        let is_list_of_primitives = field_value.length === 0 || field_value.every(elem => typeof elem !== 'object' || elem === null);
+                                        if (is_list_of_primitives) field_value.forEach(elem => all_values[final_interface_id][field_key].add(elem));
                                     }
                                 }
                             }
@@ -344,53 +529,43 @@
             _find_instances_and_collect(data);
             return all_values;
         }
-        
+
         class GraphBuilderJS {
             constructor(shape_to_final_id_map, id_to_final_shape_map, all_collected_values, root_final_id_for_graph) {
                 this.shape_to_final_id_map = shape_to_final_id_map;
                 this.id_to_final_shape_map = id_to_final_shape_map;
                 this.all_collected_values = all_collected_values;
                 this.root_final_id_for_graph = root_final_id_for_graph;
-
                 this.node_definitions = {};
                 this.edge_definitions = [];
-                
-                this.defined_interfaces_recursion = new Set(); 
+                this.defined_interfaces_recursion = new Set();
                 this.defined_property_nodes_graph = new Set();
-                this.defined_keys_nodes_graph = new Set(); 
-
-                this.node_definitions["root"] = {"shape": "Mdiamond", "label": "root"};
+                this.defined_keys_nodes_graph = new Set();
+                this.node_definitions["root"] = { "shape": "Mdiamond", "label": "root" };
                 for (const interface_id_str in this.id_to_final_shape_map) {
                     if (interface_id_str === this.root_final_id_for_graph) continue;
-                    this.node_definitions[interface_id_str] = {"shape": "box", "label": interface_id_str};
+                    this.node_definitions[interface_id_str] = { "shape": "box", "label": interface_id_str };
                 }
             }
-
             build(current_data_item, current_item_graph_label, interface_id_for_current_item) {
                 if (typeof current_data_item !== 'object' || current_data_item === null || Array.isArray(current_data_item)) return;
                 if (current_item_graph_label.startsWith("id_") && this.defined_interfaces_recursion.has(current_item_graph_label)) return;
                 if (current_item_graph_label.startsWith("id_")) this.defined_interfaces_recursion.add(current_item_graph_label);
-
                 const effective_interface_id_for_values = interface_id_for_current_item;
                 const grouped_complex_fields = {};
                 const list_fields_to_interfaces = {};
                 const primitive_or_value_fields_to_draw = [];
-
                 for (const [key, value] of Object.entries(current_data_item)) {
                     let is_list_field_of_interfaces = false;
                     if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
                         const value_keys = Object.keys(value);
-                        if (value_keys.length === 0) {
-                            primitive_or_value_fields_to_draw.push({key, value, is_list_field: false}); continue;
-                        }
+                        if (value_keys.length === 0) { primitive_or_value_fields_to_draw.push({ key, value, is_list_field: false }); continue; }
                         const value_shape_set = new Set(value_keys);
                         const target_final_interface_id = this.shape_to_final_id_map.get(getShapeKey(value_shape_set));
                         if (target_final_interface_id) {
                             if (!grouped_complex_fields[target_final_interface_id]) grouped_complex_fields[target_final_interface_id] = [];
                             grouped_complex_fields[target_final_interface_id].push(key);
-                        } else {
-                            primitive_or_value_fields_to_draw.push({key, value, is_list_field: false});
-                        }
+                        } else { primitive_or_value_fields_to_draw.push({ key, value, is_list_field: false }); }
                     } else if (Array.isArray(value)) {
                         if (value.length > 0) {
                             const first_element = value[0];
@@ -400,200 +575,157 @@
                                 const element_shape_set = element_keys.length > 0 ? new Set(element_keys) : null;
                                 const target_list_element_final_id = element_shape_set ? this.shape_to_final_id_map.get(getShapeKey(element_shape_set)) : null;
                                 if (target_list_element_final_id) {
-                                    is_list_field_of_interfaces = true;
-                                    for (let i = 1; i < value.length; i++) {
-                                        const item_in_list = value[i];
-                                        if (typeof item_in_list !== 'object' || item_in_list === null || Array.isArray(item_in_list) ||
-                                            getShapeKey(new Set(Object.keys(item_in_list))) !== getShapeKey(element_shape_set) ||
-                                            this.shape_to_final_id_map.get(getShapeKey(new Set(Object.keys(item_in_list)))) !== target_list_element_final_id) {
-                                            is_list_field_of_interfaces = false; break;
-                                        }
-                                    }
+                                    is_list_field_of_interfaces = value.every((item, i) => i === 0 || (typeof item === 'object' && item !== null && !Array.isArray(item) && this.shape_to_final_id_map.get(getShapeKey(new Set(Object.keys(item)))) === target_list_element_final_id));
                                     if (is_list_field_of_interfaces) {
                                         if (!list_fields_to_interfaces[target_list_element_final_id]) list_fields_to_interfaces[target_list_element_final_id] = [];
                                         list_fields_to_interfaces[target_list_element_final_id].push(key);
-                                    } else { primitive_or_value_fields_to_draw.push({key, value, is_list_field: true}); }
-                                } else { primitive_or_value_fields_to_draw.push({key, value, is_list_field: true}); }
-                            } else { primitive_or_value_fields_to_draw.push({key, value, is_list_field: true}); }
-                        } else { primitive_or_value_fields_to_draw.push({key, value, is_list_field: true}); }
-                    } else { primitive_or_value_fields_to_draw.push({key, value, is_list_field: false}); }
+                                    } else { primitive_or_value_fields_to_draw.push({ key, value, is_list_field: true }); }
+                                } else { primitive_or_value_fields_to_draw.push({ key, value, is_list_field: true }); }
+                            } else { primitive_or_value_fields_to_draw.push({ key, value, is_list_field: true }); }
+                        } else { primitive_or_value_fields_to_draw.push({ key, value, is_list_field: true }); }
+                    } else { primitive_or_value_fields_to_draw.push({ key, value, is_list_field: false }); }
                 }
-
                 for (const [target_id, field_keys_orig] of Object.entries(grouped_complex_fields)) {
                     const field_keys = [...field_keys_orig].sort();
                     const field_keys_identifier = getShapeKey(new Set(field_keys));
                     const keys_node_graph_id = `keysnode_${current_item_graph_label}_to_${target_id}_via_${field_keys_identifier}`;
-
                     if (!this.defined_keys_nodes_graph.has(keys_node_graph_id)) {
-                        this.node_definitions[keys_node_graph_id] = {
-                            "label": field_keys.length === 1 ? field_keys[0] : `{${field_keys.length}}`,
-                            "shape": "circle", "representedKeys": field_keys, "nodeType": "keysNode"
-                        };
+                        this.node_definitions[keys_node_graph_id] = { "label": field_keys.length === 1 ? field_keys[0] : `{${field_keys.length}}`, "shape": "circle", "representedKeys": field_keys, "nodeType": "keysNode" };
                         this.defined_keys_nodes_graph.add(keys_node_graph_id);
                     }
-                    this.edge_definitions.push({source: current_item_graph_label, target: keys_node_graph_id, attributes: {"label": ""}});
-                    this.edge_definitions.push({source: keys_node_graph_id, target: target_id, attributes: {"label": ""}});
-                    
-                    const first_field_key_for_recursion = field_keys[0]; 
-                    this.build(current_data_item[first_field_key_for_recursion], target_id, target_id);
+                    this.edge_definitions.push({ source: current_item_graph_label, target: keys_node_graph_id, attributes: { "label": "" } });
+                    this.edge_definitions.push({ source: keys_node_graph_id, target: target_id, attributes: { "label": "" } });
+                    this.build(current_data_item[field_keys[0]], target_id, target_id);
                 }
-
                 for (const [target_id, field_keys_for_list_orig] of Object.entries(list_fields_to_interfaces)) {
                     const field_keys_for_list = [...field_keys_for_list_orig].sort();
                     const field_keys_list_identifier = getShapeKey(new Set(field_keys_for_list));
                     const keys_node_graph_id_list = `keysnode_${current_item_graph_label}_to_${target_id}_via_${field_keys_list_identifier}_list`;
-
                     if (!this.defined_keys_nodes_graph.has(keys_node_graph_id_list)) {
-                        this.node_definitions[keys_node_graph_id_list] = {
-                            "label": field_keys_for_list.length === 1 ? field_keys_for_list[0] + "[]" : `{${field_keys_for_list.length}}[]`,
-                            "shape": "circle", "representedKeys": field_keys_for_list, "nodeType": "keysNode"
-                        };
+                        this.node_definitions[keys_node_graph_id_list] = { "label": field_keys_for_list.length === 1 ? field_keys_for_list[0] + "[]" : `{${field_keys_for_list.length}}[]`, "shape": "circle", "representedKeys": field_keys_for_list, "nodeType": "keysNode" };
                         this.defined_keys_nodes_graph.add(keys_node_graph_id_list);
                     }
-                    this.edge_definitions.push({source: current_item_graph_label, target: keys_node_graph_id_list, attributes: {"label": "[]"}});
-                    this.edge_definitions.push({source: keys_node_graph_id_list, target: target_id, attributes: {"label": ""}});
-                    
-                    const first_field_key_for_list_recursion = field_keys_for_list[0]; 
-                    if (current_data_item[first_field_key_for_list_recursion] && current_data_item[first_field_key_for_list_recursion].length > 0) {
-                         this.build(current_data_item[first_field_key_for_list_recursion][0], target_id, target_id);
-                    }
+                    this.edge_definitions.push({ source: current_item_graph_label, target: keys_node_graph_id_list, attributes: { "label": "[]" } });
+                    this.edge_definitions.push({ source: keys_node_graph_id_list, target: target_id, attributes: { "label": "" } });
+                    if (current_data_item[field_keys_for_list[0]]?.length > 0) this.build(current_data_item[field_keys_for_list[0]][0], target_id, target_id);
                 }
-                
-                for (const {key, value: value_data, is_list_field} of primitive_or_value_fields_to_draw) {
+                for (const { key, value: value_data, is_list_field } of primitive_or_value_fields_to_draw) {
                     let distinct_values_for_prop_node = new Set();
-                    if (effective_interface_id_for_values && this.all_collected_values[effective_interface_id_for_values] &&
-                        this.all_collected_values[effective_interface_id_for_values][key]) {
+                    if (effective_interface_id_for_values && this.all_collected_values[effective_interface_id_for_values]?.[key]) {
                         distinct_values_for_prop_node = this.all_collected_values[effective_interface_id_for_values][key];
                     }
-                    const valnode_parent_id_str = effective_interface_id_for_values ? effective_interface_id_for_values : "unknownparent";
+                    const valnode_parent_id_str = effective_interface_id_for_values || "unknownparent";
                     const property_node_graph_id = `propnode_${valnode_parent_id_str}_${key}`;
-
                     if (!this.defined_property_nodes_graph.has(property_node_graph_id)) {
-                        this.node_definitions[property_node_graph_id] = {
-                            "label": key, "shape": "circle", "primitiveValues": distinct_values_for_prop_node
-                        };
+                        this.node_definitions[property_node_graph_id] = { "label": key, "shape": "circle", "primitiveValues": distinct_values_for_prop_node };
                         this.defined_property_nodes_graph.add(property_node_graph_id);
                     }
-                    const edge_label_to_prop_node = is_list_field ? "[]" : "";
-                    this.edge_definitions.push({
-                        source: current_item_graph_label, target: property_node_graph_id,
-                        attributes: {"label": edge_label_to_prop_node }
-                    });
+                    this.edge_definitions.push({ source: current_item_graph_label, target: property_node_graph_id, attributes: { "label": is_list_field ? "[]" : "" } });
                 }
             }
-            get_graph_components() {
-                return {node_definitions: this.node_definitions, edge_definitions: this.edge_definitions};
-            }
+            get_graph_components() { return { node_definitions: this.node_definitions, edge_definitions: this.edge_definitions }; }
         }
 
         let simulation = null;
         const svg = d3.select("#graph-svg");
-        let link, node, edgeLabel, nodeLabel;
+        let link, node, edgeLabel;
         let selectedNodeData = null;
         const detailView = document.getElementById('detail-view');
-        let id_to_final_shape_map_for_details = {}; 
+        let id_to_final_shape_map_for_details = {};
 
-        const guiSettings = {
-            linkDistance: 100, 
-            linkStrength: 0.6,
-            chargeStrength: -500, 
-            regenerate: function() { processAndGenerateGraph(); }
-        };
-        const gui = new GUI({ autoPlace: false });
+        const guiSettings = { linkDistance: 120, linkStrength: 0.5, chargeStrength: -400, regenerate: () => processAndGenerateGraph() };
+        const gui = new GUI({ autoPlace: false, width: 200 });
         document.getElementById('gui-container').appendChild(gui.domElement);
-        gui.add(guiSettings, 'linkDistance', 10, 300, 1).name('Link Distance').onChange(updateSimulationForces);
+        gui.add(guiSettings, 'linkDistance', 30, 300, 5).name('Link Distance').onChange(updateSimulationForces);
         gui.add(guiSettings, 'linkStrength', 0.1, 2, 0.1).name('Link Strength').onChange(updateSimulationForces);
-        gui.add(guiSettings, 'chargeStrength', -1500, -50, 10).name('Charge Strength').onChange(updateSimulationForces);
-        gui.add(guiSettings, 'regenerate').name('Regenerate Graph');
+        gui.add(guiSettings, 'chargeStrength', -1000, -100, 20).name('Repulsion').onChange(updateSimulationForces);
+
+        function getNodeColor(d) {
+            if (d.id === 'root') return 'var(--node-root)';
+            if (d.id.startsWith('id_')) return 'var(--node-interface)';
+            if (d.id.startsWith('propnode_')) return 'var(--node-property)';
+            if (d.id.startsWith('keysnode_')) return 'var(--node-keys)';
+            return '#666';
+        }
 
         function drawGraph(nodes_data, links_data) {
             svg.selectAll("*").remove();
             selectedNodeData = null;
             updateDetailView(null);
-
             const g = svg.append("g");
-
+            const rect = svg.node().getBoundingClientRect();
             simulation = d3.forceSimulation(nodes_data)
                 .force("link", d3.forceLink(links_data).id(d => d.id).distance(guiSettings.linkDistance).strength(guiSettings.linkStrength))
                 .force("charge", d3.forceManyBody().strength(guiSettings.chargeStrength))
-                .force("center", d3.forceCenter(svg.node().getBoundingClientRect().width / 2, svg.node().getBoundingClientRect().height / 2));
+                .force("center", d3.forceCenter(rect.width / 2, rect.height / 2))
+                .force("collision", d3.forceCollide().radius(30));
 
+            link = g.append("g").selectAll("line").data(links_data).enter().append("line").attr("class", "link").attr("stroke-width", 1.5);
+            edgeLabel = g.append("g").selectAll("text").data(links_data).enter().append("text").attr("class", "link-label").text(d => d.attributes.label);
 
-            link = g.append("g").attr("class", "links")
-                .selectAll("line").data(links_data).enter().append("line")
-                .attr("class", "link")
-                .attr("stroke-width", d => d.attributes.penwidth ? parseFloat(d.attributes.penwidth) : 1);
-
-            edgeLabel = g.append("g").attr("class", "edge-labels")
-                .selectAll("text").data(links_data).enter().append("text")
-                .attr("class", "link-label").text(d => d.attributes.label);
-            
-            node = g.append("g").attr("class", "nodes")
-                .selectAll("g.node-group").data(nodes_data).enter().append("g")
-                .attr("class", "node-group")
-                .on("click", function(event, d) {
+            node = g.append("g").selectAll("g.node-group").data(nodes_data).enter().append("g").attr("class", "node-group")
+                .on("click", function (event, d) {
                     event.stopPropagation();
                     selectedNodeData = d;
                     node.selectAll('.node').classed('selected', false);
                     d3.select(this).select('.node').classed('selected', true);
-                    node.selectAll('text').style('font-weight', 'normal');
-                    d3.select(this).select('text').style('font-weight', 'bold');
                     updateDetailView(d);
                 })
                 .call(drag(simulation));
 
             node.append(d => {
-                let shapeElement;
-                if (d.shape === 'box') shapeElement = document.createElementNS(d3.namespaces.svg, "rect");
-                else if (d.shape === 'ellipse') shapeElement = document.createElementNS(d3.namespaces.svg, "ellipse");
-                else if (d.shape === 'Mdiamond') shapeElement = document.createElementNS(d3.namespaces.svg, "polygon");
-                else shapeElement = document.createElementNS(d3.namespaces.svg, "circle");
-                return shapeElement;
+                if (d.shape === 'box') return document.createElementNS(d3.namespaces.svg, "rect");
+                if (d.shape === 'Mdiamond') return document.createElementNS(d3.namespaces.svg, "polygon");
+                return document.createElementNS(d3.namespaces.svg, "circle");
             })
-            .attr("class", "node")
-            .attr("r", d => d.shape === 'ellipse' || d.shape === 'circle' ? (d.id.startsWith('keysnode_') ? 15 : 20) : null) 
-            .attr("width", d => d.shape === 'box' ? 60 : null)
-            .attr("height", d => d.shape === 'box' ? 30 : null)
-            .attr("points", d => d.shape === 'Mdiamond' ? "0,-25 25,0 0,25 -25,0" : null)
-            .attr("fill", d => {
-                if (d.id === 'root') return "#ff9900"; 
-                if (d.id.startsWith('id_')) return "#4CAF50"; 
-                if (d.id.startsWith('propnode_')) return "#2196F3"; 
-                if (d.id.startsWith('keysnode_')) return "#FFC107"; 
-                return "#ccc"; 
-            })
-            .attr("stroke", "#fff").attr("stroke-width", 1.5);
+                .attr("class", "node")
+                .attr("r", d => d.shape === 'circle' ? (d.id.startsWith('keysnode_') ? 18 : 22) : null)
+                .attr("width", d => d.shape === 'box' ? 70 : null)
+                .attr("height", d => d.shape === 'box' ? 32 : null)
+                .attr("rx", d => d.shape === 'box' ? 6 : null)
+                .attr("points", d => d.shape === 'Mdiamond' ? "0,-22 22,0 0,22 -22,0" : null)
+                .attr("fill", getNodeColor)
+                .attr("stroke", "rgba(0,0,0,0.2)").attr("stroke-width", 2);
 
-            nodeLabel = node.append("text")
-                .text(d => d.label)
-                .attr("fill", "black");
+            node.append("text").text(d => d.label.length > 12 ? d.label.slice(0, 10) + '…' : d.label)
+                .append("title").text(d => d.label); // Tooltip for full label
 
             simulation.on("tick", () => {
-                link.attr("x1", d => d.source.x).attr("y1", d => d.source.y)
-                    .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
-                edgeLabel.attr("x", d => (d.source.x + d.target.x) / 2)
-                         .attr("y", d => (d.source.y + d.target.y) / 2);
+                link.attr("x1", d => d.source.x).attr("y1", d => d.source.y).attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+                edgeLabel.attr("x", d => (d.source.x + d.target.x) / 2).attr("y", d => (d.source.y + d.target.y) / 2);
                 node.attr("transform", d => `translate(${d.x},${d.y})`);
-                node.selectAll("rect").attr("x", -30).attr("y", -15);
+                node.selectAll("rect").attr("x", -35).attr("y", -16);
             });
 
-            const zoom = d3.zoom().scaleExtent([0.1, 4]).on("zoom", (event) => g.attr("transform", event.transform));
+            const zoom = d3.zoom().scaleExtent([0.2, 4]).on("zoom", e => g.attr("transform", e.transform));
             svg.call(zoom);
-            svg.on('click', function(event) {
-                if (event.target === this || event.target === g.node()) {
-                    selectedNodeData = null;
-                    node.selectAll('.node').classed('selected', false);
-                    node.selectAll('text').style('font-weight', 'normal');
-                    updateDetailView(null);
-                }
+            setupNodeUnpin();
+            svg.on('click', function (event) {
+                if (event.target === this || event.target.tagName === 'svg') { selectedNodeData = null; node.selectAll('.node').classed('selected', false); updateDetailView(null); }
             });
         }
 
         function drag(simulation) {
-            function dragstarted(event, d) { if (!event.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; }
-            function dragged(event, d) { d.fx = event.x; d.fy = event.y; }
-            function dragended(event, d) { if (!event.active) simulation.alphaTarget(0);  }
-            return d3.drag().on("start", dragstarted).on("drag", dragged).on("end", dragended);
+            return d3.drag()
+                .on("start", (e, d) => { if (!e.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+                .on("drag", (e, d) => { d.fx = e.x; d.fy = e.y; })
+                .on("end", (e, d) => { if (!e.active) simulation.alphaTarget(0); });
+        }
+
+        // Double-click to unpin a node
+        function setupNodeUnpin() {
+            svg.on('dblclick', function (event) {
+                const target = event.target;
+                const nodeGroup = target.closest('.node-group');
+                if (nodeGroup) {
+                    const d = d3.select(nodeGroup).datum();
+                    if (d) {
+                        d.fx = null;
+                        d.fy = null;
+                        simulation.alpha(0.3).restart();
+                    }
+                }
+            });
         }
 
         function updateSimulationForces() {
@@ -604,281 +736,159 @@
         }
 
         function updateDetailView(data) {
-            if (!detailView) return;
-            if (data) {
-                let content = "";
-
-                if (data.id.startsWith('id_')) {
-                    content += `<h4>Interface Definition</h4>`;
-                    if (id_to_final_shape_map_for_details && id_to_final_shape_map_for_details[data.id]) {
-                        const fields = Array.from(id_to_final_shape_map_for_details[data.id]).sort();
-                        content += `<p><strong>Fields:</strong></p><pre>${fields.join('\n')}</pre>`;
-                    }
-                } else if (data.id.startsWith('propnode_')) {
-                    content += `<h4>Property Node</h4>`;
-                    content += `<p><strong>Property Name:</strong> ${data.label}</p>`;
-                    if (data.primitiveValues && data.primitiveValues.size > 0) {
-                        let valuesArray = Array.from(data.primitiveValues);
-                        try { 
-                            valuesArray.sort((a, b) => {  return String(a).localeCompare(String(b));}); 
-                        } catch (e) { valuesArray.sort(); }
-                        content += `<p><strong>Distinct Values:</strong></p><pre>${valuesArray.join('\n')}</pre>`;
-                    } else { content += `<p><strong>Distinct Values:</strong> (No distinct values or N/A)</p>`; }
-                } else if (data.id.startsWith('keysnode_')) {
-                    content += `<h4>Field Group Node</h4>`;
-                    if (data.representedKeys && Array.isArray(data.representedKeys)) {
-                        content += `<p><strong>Represented Fields (${data.representedKeys.length}):</strong></p><pre>${data.representedKeys.join('\n')}</pre>`;
-                    }
-                } else if (data.id === 'root') {
-                     content += `<h4>Root Node</h4>`;
-                }
-                detailView.innerHTML = content;
-            } else {
-                detailView.innerHTML = "<span>No node selected.</span>";
+            if (!data) { detailView.innerHTML = '<span class="empty-state">Click a node to view details</span>'; return; }
+            let content = "";
+            if (data.id === 'root') {
+                content = `<h4>🌟 Root Node</h4><p>The entry point of your JSON structure</p>`;
+            } else if (data.id.startsWith('id_')) {
+                const fields = id_to_final_shape_map_for_details[data.id] ? Array.from(id_to_final_shape_map_for_details[data.id]).sort() : [];
+                content = `<h4>📦 Interface: ${data.label}</h4><p><strong>Fields (${fields.length}):</strong></p><pre>${fields.join('\n') || 'No fields'}</pre>`;
+            } else if (data.id.startsWith('propnode_')) {
+                const values = data.primitiveValues?.size > 0 ? Array.from(data.primitiveValues).map(v => JSON.stringify(v)).sort() : [];
+                content = `<h4>🔹 Property: ${data.label}</h4><p><strong>Distinct values (${values.length}):</strong></p><pre>${values.join('\n') || 'No values collected'}</pre>`;
+            } else if (data.id.startsWith('keysnode_')) {
+                const keys = data.representedKeys || [];
+                content = `<h4>🔗 Field Group</h4><p><strong>Fields (${keys.length}):</strong></p><pre>${keys.join('\n')}</pre>`;
             }
+            detailView.innerHTML = content;
         }
 
         function processAndGenerateGraph() {
             let input_data;
             try {
-                if (!monacoEditorInstance) { alert("Editor not initialized."); return; }
-                input_data = JSON.parse(monacoEditorInstance.getValue());
-            } catch (e) { alert("Error parsing JSON: " + e.message); return; }
+                if (!monacoEditorInstance) { alert("Editor not ready"); return; }
+                const rawValue = monacoEditorInstance.getValue().trim();
+                if (!rawValue) { alert("Please enter some JSON data"); return; }
+                input_data = JSON.parse(rawValue);
+            } catch (e) { alert("Invalid JSON: " + e.message); return; }
 
-            const { shape_to_final_id_map, id_to_final_shape_map } = extract_interfaces_js(input_data);
-            id_to_final_shape_map_for_details = id_to_final_shape_map; 
+            // Handle primitive values at root level
+            if (input_data === null || typeof input_data !== 'object') {
+                alert(`Root value is a primitive (${input_data === null ? 'null' : typeof input_data}). Please provide an object or array.`);
+                svg.selectAll("*").remove();
+                return;
+            }
 
-            const collected_primitive_vals = collect_all_distinct_values_js(input_data, shape_to_final_id_map, id_to_final_shape_map);
+            // Handle empty object or array
+            if ((Array.isArray(input_data) && input_data.length === 0) ||
+                (!Array.isArray(input_data) && Object.keys(input_data).length === 0)) {
+                alert("Empty object or array. Please provide data with some structure.");
+                svg.selectAll("*").remove();
+                return;
+            }
+
+            // Wrap root-level arrays in an object for proper processing
+            let wrappedData = input_data;
+            let isRootArray = false;
+            if (Array.isArray(input_data)) {
+                wrappedData = { "items": input_data };
+                isRootArray = true;
+            }
+
+            const { shape_to_final_id_map, id_to_final_shape_map } = extract_interfaces_js(wrappedData);
+            id_to_final_shape_map_for_details = id_to_final_shape_map;
+            const collected_primitive_vals = collect_all_distinct_values_js(wrappedData, shape_to_final_id_map, id_to_final_shape_map);
+
             let root_final_id_for_graph = null;
-            if (typeof input_data === 'object' && input_data !== null && !Array.isArray(input_data) && Object.keys(input_data).length > 0) {
-                 const root_actual_shape_set = new Set(Object.keys(input_data));
-                 root_final_id_for_graph = shape_to_final_id_map.get(getShapeKey(root_actual_shape_set));
+            if (typeof wrappedData === 'object' && wrappedData !== null && !Array.isArray(wrappedData) && Object.keys(wrappedData).length > 0) {
+                root_final_id_for_graph = shape_to_final_id_map.get(getShapeKey(new Set(Object.keys(wrappedData))));
             }
 
             const builder = new GraphBuilderJS(shape_to_final_id_map, id_to_final_shape_map, collected_primitive_vals, root_final_id_for_graph);
-            builder.build(input_data, "root", root_final_id_for_graph);
+            builder.build(wrappedData, "root", root_final_id_for_graph);
             let { node_definitions, edge_definitions } = builder.get_graph_components();
 
-            
-            const all_interface_node_names = new Set();
-            for (const name in node_definitions) {
-                if (name.startsWith("id_")) all_interface_node_names.add(name);
+            // Update root label if we wrapped an array
+            if (isRootArray && node_definitions["root"]) {
+                node_definitions["root"].label = "root[]";
             }
 
-            const in_degree = {}; const out_degree = {};
-            all_interface_node_names.forEach(name => { in_degree[name] = 0; out_degree[name] = 0; });
-            
-            for (const edge of edge_definitions) {
-                const { source, target } = edge;
-                const s_is_interface = source.startsWith("id_");
-                const t_is_interface = target.startsWith("id_");
-                if (source === "root" && t_is_interface) { if (in_degree[target] !== undefined) in_degree[target]++; }
-                if (s_is_interface) {
-                    if (t_is_interface || target.startsWith("propnode_") || target.startsWith("keysnode_")) {
-                       if (out_degree[source] !== undefined) out_degree[source]++;
-                    }
-                    if (t_is_interface) { if (in_degree[target] !== undefined) in_degree[target]++; }
-                }
-            }
-            const interfaces_to_remove = new Set();
-            for (const iface_name of all_interface_node_names) {
-                 if (node_definitions[iface_name] && in_degree[iface_name] === 0 && out_degree[iface_name] === 0) {
-                    interfaces_to_remove.add(iface_name);
-                }
-            }
-            console.log("Interfaces to remove:", interfaces_to_remove);
+            const all_interface_node_names = new Set(Object.keys(node_definitions).filter(n => n.startsWith("id_")));
+            const in_degree = {}, out_degree = {};
+            all_interface_node_names.forEach(n => { in_degree[n] = 0; out_degree[n] = 0; });
 
+            for (const { source, target } of edge_definitions) {
+                if (source === "root" && target.startsWith("id_") && in_degree[target] !== undefined) in_degree[target]++;
+                if (source.startsWith("id_")) {
+                    if (out_degree[source] !== undefined) out_degree[source]++;
+                    if (target.startsWith("id_") && in_degree[target] !== undefined) in_degree[target]++;
+                }
+            }
+
+            const interfaces_to_remove = new Set([...all_interface_node_names].filter(n => in_degree[n] === 0 && out_degree[n] === 0));
             const final_node_definitions_map = new Map();
-            if (node_definitions["root"]) {
-                final_node_definitions_map.set("root", node_definitions["root"]);
-            }
-            for (const iface_name of all_interface_node_names) {
-                if (!interfaces_to_remove.has(iface_name) && node_definitions[iface_name]) {
-                    final_node_definitions_map.set(iface_name, node_definitions[iface_name]);
-                }
-            }
-            
-            const final_edge_definitions_list = [];
-            for (const edge of edge_definitions) {
-                const { source, target } = edge;
-                if (final_node_definitions_map.has(source)) {
-                    if (target.startsWith("propnode_") || target.startsWith("keysnode_")) {
-                        if (node_definitions[target]) {
-                            final_node_definitions_map.set(target, node_definitions[target]);
-                            final_edge_definitions_list.push(edge);
-                        }
-                    } else if (final_node_definitions_map.has(target)) {
-                        final_edge_definitions_list.push(edge);
-                    }
-                }
-            }
-            
-            const d3_nodes = Array.from(final_node_definitions_map.entries()).map(([id, attrs]) => ({ id, ...attrs }));
-            const d3_links = final_edge_definitions_list;
+            if (node_definitions["root"]) final_node_definitions_map.set("root", node_definitions["root"]);
+            all_interface_node_names.forEach(n => { if (!interfaces_to_remove.has(n) && node_definitions[n]) final_node_definitions_map.set(n, node_definitions[n]); });
 
-            if (d3_nodes.length > 0) {
-                drawGraph(d3_nodes, d3_links);
-            } else {
-                alert("No graphable data found after processing.");
-                svg.selectAll("*").remove();
-            }
+            const final_edge_definitions_list = edge_definitions.filter(({ source, target }) => {
+                if (!final_node_definitions_map.has(source)) return false;
+                if (target.startsWith("propnode_") || target.startsWith("keysnode_")) {
+                    if (node_definitions[target]) { final_node_definitions_map.set(target, node_definitions[target]); return true; }
+                }
+                return final_node_definitions_map.has(target);
+            });
+
+            const d3_nodes = Array.from(final_node_definitions_map.entries()).map(([id, attrs]) => ({ id, ...attrs }));
+            if (d3_nodes.length > 0) drawGraph(d3_nodes, final_edge_definitions_list);
+            else { alert("No graphable data found."); svg.selectAll("*").remove(); }
         }
 
         let monacoEditorInstance;
-        require.config({ paths: { 'vs': 'https://cdn.jsdelivr.net/npm/monaco-editor@0.34.1/min/vs' }});
-        require(['vs/editor/editor.main'], function() {
+        require.config({ paths: { 'vs': 'https://cdn.jsdelivr.net/npm/monaco-editor@0.34.1/min/vs' } });
+        require(['vs/editor/editor.main'], function () {
             monacoEditorInstance = monaco.editor.create(document.getElementById('editor-container'), {
                 value: JSON.stringify(inputDataExample, null, 2),
-                language: 'json', theme: 'vs-light', automaticLayout: true
+                language: 'json', theme: 'vs-dark', automaticLayout: true,
+                minimap: { enabled: false }, fontSize: 13, fontFamily: "'JetBrains Mono', monospace",
+                scrollBeyondLastLine: false, padding: { top: 16 }
             });
-            processAndGenerateGraph(); 
+            processAndGenerateGraph();
         });
 
         document.getElementById('generate-graph').addEventListener('click', processAndGenerateGraph);
-        
-        
-        const splitterElement = document.getElementById('splitter');
-        const inputPaneElement = document.getElementById('input-pane');
-        const graphPaneElement = document.getElementById('graph-pane');
-        const containerElement = document.querySelector('.container');
 
-        if (splitterElement && inputPaneElement && graphPaneElement && containerElement) {
-            const splitterWidth = splitterElement.offsetWidth;
-            const containerWidth = containerElement.offsetWidth;
-            let initialLeftWidth = (containerWidth - splitterWidth) / 2;
-            
-            const inputMinWidth = parseInt(getComputedStyle(inputPaneElement).minWidth, 10);
-            const graphMinWidth = parseInt(getComputedStyle(graphPaneElement).minWidth, 10);
+        // Ctrl+Enter to generate graph
+        document.addEventListener('keydown', e => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                processAndGenerateGraph();
+            }
+        });
 
-            if (initialLeftWidth < inputMinWidth) {
-                initialLeftWidth = inputMinWidth;
-            }
-            
-            if (containerWidth - initialLeftWidth - splitterWidth < graphMinWidth) {
-                initialLeftWidth = containerWidth - graphMinWidth - splitterWidth;
-                
-                if (initialLeftWidth < inputMinWidth) {
-                    initialLeftWidth = inputMinWidth; 
-                    
-                }
-            }
-            inputPaneElement.style.width = initialLeftWidth + 'px';
-            if (monacoEditorInstance) {
-                 monacoEditorInstance.layout();
-            }
-        }
-
-        
+        // Splitter logic
         const splitter = document.getElementById('splitter');
         const inputPane = document.getElementById('input-pane');
-        const graphPane = document.getElementById('graph-pane');
         const container = document.querySelector('.container');
         let isDragging = false;
-        if (splitter && inputPane && graphPane && container) {
-            splitter.addEventListener('mousedown', function(e) {
-                isDragging = true; document.body.style.userSelect = 'none'; document.body.style.pointerEvents = 'none';
-            });
-            document.addEventListener('mousemove', function(e) {
-                if (!isDragging) return;
-                const containerRect = container.getBoundingClientRect();
-                let newLeftWidth = e.clientX - containerRect.left;
-                const inputMinWidth = parseInt(getComputedStyle(inputPane).minWidth);
-                const graphMinWidth = parseInt(getComputedStyle(graphPane).minWidth);
-                const splitterWidth = splitter.offsetWidth;
-                if (newLeftWidth < inputMinWidth) newLeftWidth = inputMinWidth;
-                if (container.offsetWidth - newLeftWidth - splitterWidth < graphMinWidth) {
-                    newLeftWidth = container.offsetWidth - graphMinWidth - splitterWidth;
-                }
-                inputPane.style.width = newLeftWidth + 'px';
-            });
-            document.addEventListener('mouseup', function(e) {
-                if (isDragging) {
-                    isDragging = false; document.body.style.userSelect = ''; document.body.style.pointerEvents = '';
-                    if (monacoEditorInstance) monacoEditorInstance.layout();
-                    
-                }
-            });
-        } else { console.warn("Splitter elements not found."); }
 
-        
-        const horizontalSplitter = document.getElementById('horizontal-splitter-graph-detail');
-        const graphAreaWrapper = document.getElementById('graph-area-wrapper');
-        const detailViewPane = document.getElementById('detail-view');
-        const graphPaneForHorizontalSplit = document.getElementById('graph-pane'); 
+        splitter.addEventListener('mousedown', () => { isDragging = true; document.body.style.userSelect = 'none'; });
+        document.addEventListener('mousemove', e => {
+            if (!isDragging) return;
+            const rect = container.getBoundingClientRect();
+            let newWidth = Math.max(250, Math.min(e.clientX - rect.left, rect.width - 350));
+            inputPane.style.width = newWidth + 'px';
+        });
+        document.addEventListener('mouseup', () => { isDragging = false; document.body.style.userSelect = ''; });
 
-        let isHorizontalDragging = false;
+        // Horizontal splitter
+        const hSplitter = document.getElementById('horizontal-splitter');
+        const graphArea = document.getElementById('graph-area-wrapper');
+        const detailPane = document.getElementById('detail-view');
+        const graphPane = document.getElementById('graph-pane');
+        let isHDragging = false;
 
-        if (horizontalSplitter && graphAreaWrapper && detailViewPane && graphPaneForHorizontalSplit) {
-            horizontalSplitter.addEventListener('mousedown', function(e) {
-                e.preventDefault(); 
-                isHorizontalDragging = true;
-                document.body.style.userSelect = 'none';
-                document.body.style.pointerEvents = 'none';
-            });
-
-            document.addEventListener('mousemove', function(e) {
-                if (!isHorizontalDragging) return;
-                e.preventDefault();
-
-                const graphPaneRect = graphPaneForHorizontalSplit.getBoundingClientRect();
-                let newGraphAreaHeight = e.clientY - graphPaneRect.top;
-
-                const detailMinHeight = parseInt(getComputedStyle(detailViewPane).minHeight, 10) || 50;
-                const graphMinHeight = parseInt(getComputedStyle(graphAreaWrapper).minHeight, 10) || 100;
-                const splitterHeight = horizontalSplitter.offsetHeight;
-
-                
-                if (newGraphAreaHeight > graphPaneForHorizontalSplit.clientHeight - detailMinHeight - splitterHeight) {
-                    newGraphAreaHeight = graphPaneForHorizontalSplit.clientHeight - detailMinHeight - splitterHeight;
-                }
-
-                
-                if (newGraphAreaHeight < graphMinHeight) {
-                    newGraphAreaHeight = graphMinHeight;
-                }
-                
-                
-                if (newGraphAreaHeight < graphMinHeight) newGraphAreaHeight = graphMinHeight;
-                let newDetailViewHeight = graphPaneForHorizontalSplit.clientHeight - newGraphAreaHeight - splitterHeight;
-                if (newDetailViewHeight < detailMinHeight) {
-                    newDetailViewHeight = detailMinHeight;
-                    
-                    newGraphAreaHeight = graphPaneForHorizontalSplit.clientHeight - newDetailViewHeight - splitterHeight;
-                }
-
-
-                graphAreaWrapper.style.height = newGraphAreaHeight + 'px';
-                detailViewPane.style.height = newDetailViewHeight + 'px';
-
-                if (simulation && svg.node()) {
-                    const svgWidth = svg.node().getBoundingClientRect().width;
-                    const svgHeight = svg.node().getBoundingClientRect().height;
-                    if (svgWidth > 0 && svgHeight > 0) {
-                        simulation.force("center", d3.forceCenter(svgWidth / 2, svgHeight / 2));
-                        simulation.alpha(0.1).restart(); 
-                    }
-                }
-            });
-
-            document.addEventListener('mouseup', function(e) {
-                if (isHorizontalDragging) {
-                    isHorizontalDragging = false;
-                    document.body.style.userSelect = '';
-                    document.body.style.pointerEvents = '';
-
-                    if (simulation && svg.node()) {
-                        const svgWidth = svg.node().getBoundingClientRect().width;
-                        const svgHeight = svg.node().getBoundingClientRect().height;
-                        if (svgWidth > 0 && svgHeight > 0) {
-                           simulation.force("center", d3.forceCenter(svgWidth / 2, svgHeight / 2));
-                           simulation.alpha(0.3).restart();
-                        }
-                    }
-                }
-            });
-        } else {
-            console.warn("Horizontal splitter elements (graph/detail) not found.");
-        }
+        hSplitter.addEventListener('mousedown', e => { e.preventDefault(); isHDragging = true; document.body.style.userSelect = 'none'; });
+        document.addEventListener('mousemove', e => {
+            if (!isHDragging) return;
+            const rect = graphPane.getBoundingClientRect();
+            let newHeight = Math.max(100, Math.min(e.clientY - rect.top, rect.height - 80));
+            graphArea.style.height = newHeight + 'px';
+            graphArea.style.flex = 'none';
+            detailPane.style.height = (rect.height - newHeight - 4) + 'px';
+            detailPane.style.flex = 'none';
+        });
+        document.addEventListener('mouseup', () => { if (isHDragging && simulation) simulation.alpha(0.1).restart(); isHDragging = false; document.body.style.userSelect = ''; });
     </script>
 </body>
+
 </html>
