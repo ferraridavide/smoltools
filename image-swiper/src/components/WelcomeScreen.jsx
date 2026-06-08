@@ -7,8 +7,7 @@ export default function WelcomeScreen({ onSelectFolder, isSupported }) {
         <div className="welcome-icon">🖼️</div>
         <h1 className="welcome-title">ImageSwipe</h1>
         <p className="welcome-subtitle">
-          Swipe through your images like never before. 
-          Choose what to keep and what to delete with a simple gesture or keystroke.
+          Swipe through your images, choose what to keep and what to delete with a simple gesture or keystroke.
         </p>
         
         <div className="welcome-features">

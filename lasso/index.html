@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lasso - PDF Text Selector</title>
+    <meta name="description" content="Select PDF text visually with rectangle and freeform lasso tools.">
+    <style>
+        :root {
+            --bg: #f6f5f0;
+            --surface: #ffffff;
+            --surface-soft: #eceae2;
+            --ink: #171819;
+            --muted: #686b6f;
+            --line: #d8d5ca;
+            --accent: #0f766e;
+            --accent-strong: #115e59;
+            --accent-soft: rgba(15, 118, 110, 0.14);
+            --warn: #b45309;
+            --shadow: 0 14px 34px rgba(35, 38, 42, 0.12);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            height: 100%;
+        }
+
+        body {
+            margin: 0;
+            color: var(--ink);
+            background: var(--bg);
+            font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        button,
+        input,
+        textarea {
+            font: inherit;
+        }
+
+        button,
+        .file-button {
+            min-height: 36px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            color: var(--ink);
+            background: var(--surface);
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.45rem;
+            padding: 0.45rem 0.75rem;
+            transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+        }
+
+        button:hover,
+        .file-button:hover {
+            border-color: #aaa59a;
+            background: #fbfaf6;
+        }
+
+        button:active,
+        .file-button:active {
+            transform: translateY(1px);
+        }
+
+        button:disabled {
+            opacity: 0.48;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .app {
+            height: 100%;
+            display: grid;
+            grid-template-rows: auto 1fr;
+        }
+
+        .topbar {
+            min-height: 64px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 0.8rem 1rem;
+            background: var(--surface);
+            border-bottom: 1px solid var(--line);
+        }
+
+        .brand {
+            display: flex;
+            align-items: baseline;
+            gap: 0.65rem;
+            min-width: 170px;
+        }
+
+        .brand h1 {
+            margin: 0;
+            font-size: 1.35rem;
+            line-height: 1;
+        }
+
+        .brand span {
+            color: var(--muted);
+            font-size: 0.9rem;
+            white-space: nowrap;
+        }
+
+        .toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 0.55rem;
+            flex-wrap: wrap;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .primary {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+        }
+
+        .primary:hover {
+            background: var(--accent-strong);
+            border-color: var(--accent-strong);
+        }
+
+        .segmented {
+            display: inline-flex;
+            padding: 3px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: var(--surface-soft);
+        }
+
+        .segmented button {
+            min-height: 30px;
+            border: 0;
+            border-radius: 6px;
+            background: transparent;
+            padding: 0.35rem 0.7rem;
+        }
+
+        .segmented button.active {
+            background: var(--surface);
+            color: var(--accent-strong);
+            box-shadow: 0 1px 4px rgba(34, 35, 37, 0.12);
+        }
+
+        .icon-button {
+            width: 38px;
+            padding: 0;
+            font-weight: 700;
+        }
+
+        .shell {
+            min-height: 0;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 360px;
+        }
+
+        .viewer {
+            min-width: 0;
+            min-height: 0;
+            overflow: auto;
+            position: relative;
+            padding: 28px;
+        }
+
+        .document {
+            position: relative;
+            width: fit-content;
+            min-width: min(100%, 720px);
+            margin: 0 auto;
+        }
+
+        .empty {
+            min-height: calc(100vh - 120px);
+            display: grid;
+            place-items: center;
+            color: var(--muted);
+            border: 2px dashed var(--line);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.52);
+        }
+
+        .empty.dragover {
+            color: var(--accent-strong);
+            border-color: var(--accent);
+            background: var(--accent-soft);
+        }
+
+        .empty strong {
+            color: var(--ink);
+            display: block;
+            margin-bottom: 0.25rem;
+            font-size: 1.05rem;
+        }
+
+        .page {
+            position: relative;
+            margin: 0 auto 24px;
+            background: white;
+            box-shadow: var(--shadow);
+        }
+
+        .page canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        .text-layer {
+            position: absolute;
+            inset: 0;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        .text-item {
+            position: absolute;
+            color: transparent;
+            white-space: pre;
+            transform-origin: 0 0;
+            cursor: crosshair;
+            border-radius: 3px;
+            pointer-events: none;
+        }
+
+        .text-item.selected {
+            background: rgba(15, 118, 110, 0.27);
+            outline: 1px solid rgba(15, 118, 110, 0.56);
+        }
+
+        .selection-svg {
+            position: absolute;
+            inset: 0 auto auto 0;
+            pointer-events: none;
+            overflow: visible;
+            z-index: 20;
+        }
+
+        .selection-shape {
+            fill: rgba(180, 83, 9, 0.12);
+            stroke: var(--warn);
+            stroke-width: 2;
+            stroke-dasharray: 7 5;
+            vector-effect: non-scaling-stroke;
+        }
+
+        .side {
+            min-width: 0;
+            min-height: 0;
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            border-left: 1px solid var(--line);
+            background: var(--surface);
+        }
+
+        .side-header {
+            padding: 1rem;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .side-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+        }
+
+        .side-title h2 {
+            margin: 0;
+            font-size: 0.95rem;
+        }
+
+        .count {
+            color: var(--muted);
+            font-size: 0.85rem;
+            white-space: nowrap;
+        }
+
+        .status {
+            margin-top: 0.45rem;
+            min-height: 1.25rem;
+            color: var(--muted);
+            font-size: 0.85rem;
+        }
+
+        .status.error {
+            color: #991b1b;
+        }
+
+        .output {
+            min-width: 0;
+            min-height: 0;
+            width: 100%;
+            border: 0;
+            resize: none;
+            padding: 1rem;
+            color: var(--ink);
+            background: #fff;
+            line-height: 1.5;
+            outline: none;
+        }
+
+        .side-actions {
+            display: flex;
+            gap: 0.55rem;
+            flex-wrap: wrap;
+            padding: 0.75rem 1rem 1rem;
+            border-top: 1px solid var(--line);
+        }
+
+        .loading {
+            position: absolute;
+            top: 1rem;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 40;
+            padding: 0.45rem 0.7rem;
+            border-radius: 8px;
+            color: var(--accent-strong);
+            background: #f0fdfa;
+            border: 1px solid #99f6e4;
+            box-shadow: 0 8px 20px rgba(20, 83, 78, 0.12);
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        @media (max-width: 900px) {
+            .topbar {
+                align-items: stretch;
+                flex-direction: column;
+            }
+
+            .brand {
+                justify-content: space-between;
+            }
+
+            .toolbar {
+                justify-content: flex-start;
+            }
+
+            .shell {
+                grid-template-columns: 1fr;
+                grid-template-rows: minmax(55vh, 1fr) 320px;
+            }
+
+            .side {
+                border-left: 0;
+                border-top: 1px solid var(--line);
+            }
+
+            .viewer {
+                padding: 18px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app">
+        <header class="topbar">
+            <div class="brand">
+                <h1>Lasso</h1>
+                <span>PDF text picker</span>
+            </div>
+            <div class="toolbar">
+                <label class="file-button primary" for="fileInput">Open PDF</label>
+                <input id="fileInput" class="file-input" type="file" accept="application/pdf,.pdf">
+                <div class="segmented" aria-label="Selection mode">
+                    <button id="rectMode" class="active" type="button">Rect</button>
+                    <button id="lassoMode" type="button">Lasso</button>
+                </div>
+                <button id="zoomOut" class="icon-button" type="button" title="Zoom out" disabled>-</button>
+                <button id="zoomReset" type="button" disabled>100%</button>
+                <button id="zoomIn" class="icon-button" type="button" title="Zoom in" disabled>+</button>
+            </div>
+        </header>
+
+        <main class="shell">
+            <section id="viewer" class="viewer">
+                <div id="loading" class="loading hidden">Loading...</div>
+                <div id="document" class="document">
+                    <div id="empty" class="empty">
+                        <div>
+                            <strong>Drop PDF</strong>
+                            <span>or use Open PDF</span>
+                        </div>
+                    </div>
+                    <svg id="selectionSvg" class="selection-svg" width="0" height="0" aria-hidden="true"></svg>
+                </div>
+            </section>
+
+            <aside class="side">
+                <div class="side-header">
+                    <div class="side-title">
+                        <h2>Selection</h2>
+                        <span id="selectionCount" class="count">0 elements</span>
+                    </div>
+                    <div id="status" class="status">No PDF loaded.</div>
+                </div>
+                <textarea id="output" class="output" spellcheck="false" aria-label="Selected text"></textarea>
+                <div class="side-actions">
+                    <button id="copyText" class="primary" type="button" disabled>Copy</button>
+                    <button id="clearSelection" type="button" disabled>Clear</button>
+                </div>
+            </aside>
+        </main>
+    </div>
+
+    <script>
+        "use strict";
+
+        const $ = (id) => document.getElementById(id);
+        const PDFJS_SOURCES = [
+            {
+                script: "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js",
+                worker: "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js",
+            },
+            {
+                script: "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js",
+                worker: "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js",
+            },
+        ];
+
+        const els = {
+            fileInput: $("fileInput"),
+            rectMode: $("rectMode"),
+            lassoMode: $("lassoMode"),
+            zoomOut: $("zoomOut"),
+            zoomReset: $("zoomReset"),
+            zoomIn: $("zoomIn"),
+            viewer: $("viewer"),
+            document: $("document"),
+            empty: $("empty"),
+            selectionSvg: $("selectionSvg"),
+            loading: $("loading"),
+            status: $("status"),
+            output: $("output"),
+            selectionCount: $("selectionCount"),
+            copyText: $("copyText"),
+            clearSelection: $("clearSelection"),
+        };
+
+        const state = {
+            pdf: null,
+            pdfjs: null,
+            fileName: "",
+            mode: "rect",
+            zoom: 1,
+            fitScale: 1,
+            renderToken: 0,
+            elements: [],
+            selectedIds: new Set(),
+            drawing: null,
+        };
+        let pdfjsReady = null;
+
+        els.fileInput.addEventListener("change", (event) => {
+            const file = event.target.files && event.target.files[0];
+            if (file) loadPdf(file);
+        });
+
+        els.rectMode.addEventListener("click", () => setMode("rect"));
+        els.lassoMode.addEventListener("click", () => setMode("lasso"));
+        els.zoomOut.addEventListener("click", () => changeZoom(-0.15));
+        els.zoomIn.addEventListener("click", () => changeZoom(0.15));
+        els.zoomReset.addEventListener("click", () => {
+            state.zoom = 1;
+            renderPdf();
+        });
+        els.copyText.addEventListener("click", copySelection);
+        els.clearSelection.addEventListener("click", clearSelection);
+
+        els.empty.addEventListener("dragover", (event) => {
+            event.preventDefault();
+            els.empty.classList.add("dragover");
+        });
+        els.empty.addEventListener("dragleave", () => els.empty.classList.remove("dragover"));
+        els.empty.addEventListener("drop", (event) => {
+            event.preventDefault();
+            els.empty.classList.remove("dragover");
+            const file = event.dataTransfer.files && event.dataTransfer.files[0];
+            if (file) loadPdf(file);
+        });
+
+        els.document.addEventListener("pointerdown", startSelection);
+        window.addEventListener("pointermove", moveSelection);
+        window.addEventListener("pointerup", finishSelection);
+        window.addEventListener("resize", () => {
+            if (!state.pdf) return;
+            window.clearTimeout(window.__lassoResizeTimer);
+            window.__lassoResizeTimer = window.setTimeout(renderPdf, 180);
+        });
+
+        function setMode(mode) {
+            state.mode = mode;
+            els.rectMode.classList.toggle("active", mode === "rect");
+            els.lassoMode.classList.toggle("active", mode === "lasso");
+        }
+
+        async function loadPdf(file) {
+            if (file.type && file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+                setStatus("Choose a PDF file.", true);
+                return;
+            }
+
+            setLoading(true);
+            clearSelection();
+            state.fileName = file.name;
+
+            try {
+                const pdfjs = await ensurePdfJs();
+                const data = await file.arrayBuffer();
+                state.pdf = await pdfjs.getDocument({ data: new Uint8Array(data) }).promise;
+                state.zoom = 1;
+                await renderPdf();
+                setStatus(`${file.name} loaded.`);
+            } catch (error) {
+                console.error(error);
+                resetDocument();
+                setStatus("PDF could not be opened.", true);
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        async function renderPdf() {
+            if (!state.pdf) return;
+
+            const token = ++state.renderToken;
+            setLoading(true);
+            els.empty.classList.add("hidden");
+            els.document.querySelectorAll(".page").forEach((page) => page.remove());
+            clearSvg();
+            state.elements = [];
+            state.selectedIds.clear();
+            updateOutput();
+
+            try {
+                const firstPage = await state.pdf.getPage(1);
+                const firstViewport = firstPage.getViewport({ scale: 1 });
+                const availableWidth = Math.max(320, els.viewer.clientWidth - 82);
+                state.fitScale = Math.min(1.7, availableWidth / firstViewport.width);
+                await renderPage(firstPage, 1, state.fitScale * state.zoom, token);
+
+                for (let pageNumber = 2; pageNumber <= state.pdf.numPages; pageNumber += 1) {
+                    if (token !== state.renderToken) return;
+                    const page = await state.pdf.getPage(pageNumber);
+                    await renderPage(page, pageNumber, state.fitScale * state.zoom, token);
+                }
+
+                setToolEnabled(true);
+                updateZoomLabel();
+                setSvgBounds();
+            } catch (error) {
+                console.error(error);
+                resetDocument();
+                setStatus("PDF rendering failed.", true);
+            } finally {
+                if (token === state.renderToken) setLoading(false);
+            }
+        }
+
+        async function renderPage(page, pageNumber, scale, token) {
+            const viewport = page.getViewport({ scale });
+            const pageEl = document.createElement("div");
+            const canvas = document.createElement("canvas");
+            const textLayer = document.createElement("div");
+            const outputScale = window.devicePixelRatio || 1;
+
+            pageEl.className = "page";
+            pageEl.style.width = `${viewport.width}px`;
+            pageEl.style.height = `${viewport.height}px`;
+            textLayer.className = "text-layer";
+
+            canvas.width = Math.floor(viewport.width * outputScale);
+            canvas.height = Math.floor(viewport.height * outputScale);
+            canvas.style.width = `${viewport.width}px`;
+            canvas.style.height = `${viewport.height}px`;
+            pageEl.append(canvas, textLayer);
+            els.document.insertBefore(pageEl, els.selectionSvg);
+
+            const context = canvas.getContext("2d");
+            context.setTransform(outputScale, 0, 0, outputScale, 0, 0);
+            await page.render({ canvasContext: context, viewport }).promise;
+            if (token !== state.renderToken) return;
+
+            const textContent = await page.getTextContent();
+            for (const item of textContent.items) {
+                if (!item.str || !item.str.trim()) continue;
+                const textEl = createTextElement(item, viewport, pageNumber, textLayer);
+                textLayer.appendChild(textEl);
+            }
+        }
+
+        function createTextElement(item, viewport, pageNumber, textLayer) {
+            const matrix = state.pdfjs.Util.transform(viewport.transform, item.transform);
+            const angle = Math.atan2(matrix[1], matrix[0]);
+            const fontHeight = Math.hypot(matrix[2], matrix[3]) || Math.abs(matrix[0]) || 10;
+            const width = Math.max(1, item.width * viewport.scale);
+            const left = matrix[4];
+            const top = matrix[5] - fontHeight;
+            const id = `p${pageNumber}-${state.elements.length}`;
+            const span = document.createElement("span");
+
+            span.className = "text-item";
+            span.textContent = item.str;
+            span.dataset.id = id;
+            span.style.left = `${left}px`;
+            span.style.top = `${top}px`;
+            span.style.width = `${width}px`;
+            span.style.height = `${fontHeight}px`;
+            span.style.fontSize = `${fontHeight}px`;
+            span.style.transform = `rotate(${angle}rad)`;
+
+            state.elements.push({
+                id,
+                page: pageNumber,
+                text: item.str,
+                left,
+                top,
+                right: left + width,
+                bottom: top + fontHeight,
+                cx: left + width / 2,
+                cy: top + fontHeight / 2,
+                width,
+                height: fontHeight,
+                span,
+                textLayer,
+            });
+
+            return span;
+        }
+
+        function startSelection(event) {
+            if (!state.pdf || event.button !== 0) return;
+            const point = localPoint(event);
+            state.drawing = {
+                mode: state.mode,
+                start: point,
+                points: [point],
+                additive: event.shiftKey,
+            };
+            els.document.setPointerCapture(event.pointerId);
+            drawSelectionShape();
+            event.preventDefault();
+        }
+
+        function moveSelection(event) {
+            if (!state.drawing) return;
+            const point = localPoint(event);
+            const drawing = state.drawing;
+
+            if (drawing.mode === "rect") {
+                drawing.points = [drawing.start, point];
+            } else {
+                const last = drawing.points[drawing.points.length - 1];
+                if (!last || Math.hypot(point.x - last.x, point.y - last.y) > 3) {
+                    drawing.points.push(point);
+                }
+            }
+
+            drawSelectionShape();
+        }
+
+        function finishSelection(event) {
+            if (!state.drawing) return;
+            const drawing = state.drawing;
+            if (!drawing.additive) state.selectedIds.clear();
+
+            const selected = drawing.mode === "rect"
+                ? elementsInRect(drawing.start, localPoint(event))
+                : elementsInPolygon(drawing.points);
+
+            selected.forEach((element) => state.selectedIds.add(element.id));
+            state.drawing = null;
+            clearSvg();
+            syncHighlights();
+            updateOutput();
+        }
+
+        function localPoint(event) {
+            const rect = els.document.getBoundingClientRect();
+            return {
+                x: event.clientX - rect.left,
+                y: event.clientY - rect.top,
+            };
+        }
+
+        function elementLocalBox(element) {
+            const docRect = els.document.getBoundingClientRect();
+            const spanRect = element.span.getBoundingClientRect();
+            const left = spanRect.left - docRect.left;
+            const top = spanRect.top - docRect.top;
+            const right = spanRect.right - docRect.left;
+            const bottom = spanRect.bottom - docRect.top;
+
+            return {
+                left,
+                top,
+                right,
+                bottom,
+                cx: left + (right - left) / 2,
+                cy: top + (bottom - top) / 2,
+            };
+        }
+
+        function elementsInRect(start, end) {
+            const rect = {
+                left: Math.min(start.x, end.x),
+                top: Math.min(start.y, end.y),
+                right: Math.max(start.x, end.x),
+                bottom: Math.max(start.y, end.y),
+            };
+
+            return state.elements.filter((element) => {
+                const box = elementLocalBox(element);
+                return box.right >= rect.left
+                    && box.left <= rect.right
+                    && box.bottom >= rect.top
+                    && box.top <= rect.bottom;
+            });
+        }
+
+        function elementsInPolygon(points) {
+            if (points.length < 3) return [];
+            return state.elements.filter((element) => {
+                const box = elementLocalBox(element);
+                return pointInPolygon({ x: box.cx, y: box.cy }, points);
+            });
+        }
+
+        function pointInPolygon(point, polygon) {
+            let inside = false;
+            for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i, i += 1) {
+                const a = polygon[i];
+                const b = polygon[j];
+                const crosses = (a.y > point.y) !== (b.y > point.y);
+                if (crosses) {
+                    const xAtY = ((b.x - a.x) * (point.y - a.y)) / (b.y - a.y) + a.x;
+                    if (point.x < xAtY) inside = !inside;
+                }
+            }
+            return inside;
+        }
+
+        function drawSelectionShape() {
+            clearSvg();
+            setSvgBounds();
+            const drawing = state.drawing;
+            if (!drawing) return;
+
+            if (drawing.mode === "rect") {
+                const [start, end] = drawing.points;
+                if (!end) return;
+                const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+                rect.setAttribute("class", "selection-shape");
+                rect.setAttribute("x", String(Math.min(start.x, end.x)));
+                rect.setAttribute("y", String(Math.min(start.y, end.y)));
+                rect.setAttribute("width", String(Math.abs(end.x - start.x)));
+                rect.setAttribute("height", String(Math.abs(end.y - start.y)));
+                els.selectionSvg.appendChild(rect);
+                return;
+            }
+
+            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            const d = drawing.points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
+            path.setAttribute("class", "selection-shape");
+            path.setAttribute("d", d);
+            els.selectionSvg.appendChild(path);
+        }
+
+        function setSvgBounds() {
+            els.selectionSvg.setAttribute("width", String(Math.max(els.document.scrollWidth, els.document.offsetWidth)));
+            els.selectionSvg.setAttribute("height", String(Math.max(els.document.scrollHeight, els.document.offsetHeight)));
+        }
+
+        function clearSvg() {
+            els.selectionSvg.replaceChildren();
+        }
+
+        function syncHighlights() {
+            state.elements.forEach((element) => {
+                element.span.classList.toggle("selected", state.selectedIds.has(element.id));
+            });
+        }
+
+        function updateOutput() {
+            const selected = state.elements.filter((element) => state.selectedIds.has(element.id));
+            const pages = new Map();
+
+            for (const element of selected) {
+                if (!pages.has(element.page)) pages.set(element.page, []);
+                pages.get(element.page).push(element);
+            }
+
+            const pageTexts = [...pages.entries()]
+                .sort((a, b) => a[0] - b[0])
+                .map(([, elements]) => pageText(elements))
+                .filter(Boolean);
+
+            els.output.value = pageTexts.join("\n\n");
+            const count = selected.length;
+            els.selectionCount.textContent = `${count} ${count === 1 ? "element" : "elements"}`;
+            els.copyText.disabled = count === 0;
+            els.clearSelection.disabled = count === 0;
+        }
+
+        function pageText(elements) {
+            const sorted = [...elements].sort((a, b) => a.cy - b.cy || a.left - b.left);
+            const lines = [];
+
+            for (const element of sorted) {
+                const line = lines.find((candidate) => Math.abs(candidate.cy - element.cy) <= Math.max(4, candidate.height * 0.55, element.height * 0.55));
+                if (line) {
+                    line.items.push(element);
+                    line.cy = (line.cy * (line.items.length - 1) + element.cy) / line.items.length;
+                    line.height = Math.max(line.height, element.height);
+                } else {
+                    lines.push({ cy: element.cy, height: element.height, items: [element] });
+                }
+            }
+
+            return lines
+                .sort((a, b) => a.cy - b.cy)
+                .map((line) => joinLine(line.items.sort((a, b) => a.left - b.left)))
+                .filter(Boolean)
+                .join("\n");
+        }
+
+        function joinLine(items) {
+            let text = "";
+            let previous = null;
+
+            for (const item of items) {
+                const chunk = item.text.replace(/\s+/g, " ");
+                if (!chunk.trim()) continue;
+
+                if (previous && shouldInsertSpace(text, chunk, item.left - previous.right, Math.min(previous.height, item.height))) {
+                    text += " ";
+                }
+                text += chunk;
+                previous = item;
+            }
+
+            return text.trimEnd();
+        }
+
+        function shouldInsertSpace(currentText, nextText, gap, height) {
+            if (!currentText || /\s$/.test(currentText) || /^\s/.test(nextText)) return false;
+            if (/^[,.;:!?%)]/.test(nextText)) return false;
+            if (/[(/-]$/.test(currentText)) return false;
+            return gap > Math.max(2, height * 0.18);
+        }
+
+        async function copySelection() {
+            const text = els.output.value;
+            if (!text) return;
+
+            try {
+                await navigator.clipboard.writeText(text);
+                setStatus("Copied selected text.");
+            } catch {
+                els.output.focus();
+                els.output.select();
+                document.execCommand("copy");
+                setStatus("Copied selected text.");
+            }
+        }
+
+        function clearSelection() {
+            state.selectedIds.clear();
+            syncHighlights();
+            updateOutput();
+        }
+
+        function changeZoom(delta) {
+            state.zoom = Math.min(2.6, Math.max(0.45, state.zoom + delta));
+            renderPdf();
+        }
+
+        function updateZoomLabel() {
+            els.zoomReset.textContent = `${Math.round(state.zoom * 100)}%`;
+        }
+
+        function setToolEnabled(enabled) {
+            els.zoomOut.disabled = !enabled;
+            els.zoomReset.disabled = !enabled;
+            els.zoomIn.disabled = !enabled;
+        }
+
+        function setLoading(isLoading) {
+            els.loading.classList.toggle("hidden", !isLoading);
+        }
+
+        function setStatus(message, isError = false) {
+            els.status.textContent = message;
+            els.status.classList.toggle("error", isError);
+        }
+
+        function resetDocument() {
+            state.pdf = null;
+            state.elements = [];
+            state.selectedIds.clear();
+            els.document.querySelectorAll(".page").forEach((page) => page.remove());
+            els.empty.classList.remove("hidden");
+            setToolEnabled(false);
+            updateOutput();
+            clearSvg();
+        }
+
+        function ensurePdfJs() {
+            if (state.pdfjs) return Promise.resolve(state.pdfjs);
+            if (window.pdfjsLib) {
+                state.pdfjs = window.pdfjsLib;
+                state.pdfjs.GlobalWorkerOptions.workerSrc = PDFJS_SOURCES[0].worker;
+                return Promise.resolve(state.pdfjs);
+            }
+
+            if (!pdfjsReady) {
+                pdfjsReady = loadPdfJs();
+            }
+
+            return pdfjsReady;
+        }
+
+        async function loadPdfJs() {
+            let lastError = null;
+
+            for (const source of PDFJS_SOURCES) {
+                try {
+                    await loadScript(source.script);
+                    if (!window.pdfjsLib) throw new Error("PDF.js global was not registered.");
+                    state.pdfjs = window.pdfjsLib;
+                    state.pdfjs.GlobalWorkerOptions.workerSrc = source.worker;
+                    setStatus(state.pdf ? `${state.fileName} loaded.` : "No PDF loaded.");
+                    return state.pdfjs;
+                } catch (error) {
+                    lastError = error;
+                }
+            }
+
+            throw lastError || new Error("PDF.js could not be loaded.");
+        }
+
+        function loadScript(src) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement("script");
+                const timer = window.setTimeout(() => {
+                    script.remove();
+                    reject(new Error(`Timed out loading ${src}`));
+                }, 12000);
+
+                script.src = src;
+                script.async = true;
+                script.onload = () => {
+                    window.clearTimeout(timer);
+                    resolve();
+                };
+                script.onerror = () => {
+                    window.clearTimeout(timer);
+                    script.remove();
+                    reject(new Error(`Failed to load ${src}`));
+                };
+                document.head.appendChild(script);
+            });
+        }
+
+        ensurePdfJs().catch(() => {
+            setStatus("PDF engine could not be loaded.", true);
+        });
+    </script>
+</body>
+
+</html>
