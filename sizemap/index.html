@@ -1,0 +1,2432 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>sizemap - see what fills a folder</title>
+    <meta name="description" content="See what's filling your disk: a folder treemap that runs right in your browser. Nothing to install, and your files never leave your machine.">
+    <link rel="canonical" href="https://smoltools.davide.im/sizemap/">
+
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="smoltools">
+    <meta property="og:url" content="https://smoltools.davide.im/sizemap/">
+    <meta property="og:title" content="sizemap - see what's filling your disk">
+    <meta property="og:description" content="A folder treemap that runs right in your browser. Nothing to install, and your files never leave your machine.">
+    <meta property="og:image" content="https://smoltools.davide.im/sizemap/og.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="The sizemap logo over a dimmed treemap of a home folder, with the tagline: see what's filling your disk, nothing to install, no uploads.">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="sizemap - see what's filling your disk">
+    <meta name="twitter:description" content="A folder treemap that runs right in your browser. Nothing to install, and your files never leave your machine.">
+    <meta name="twitter:image" content="https://smoltools.davide.im/sizemap/og.png">
+    <meta name="twitter:image:alt" content="The sizemap logo over a dimmed treemap of a home folder, with the tagline: see what's filling your disk, nothing to install, no uploads.">
+    <style>
+        :root {
+            --bg: #0e1117;
+            --top: #151922;
+            --panel: #161a23;
+            --line: #252a35;
+            --line-2: #313744;
+            --ink: #dfe3ea;
+            --muted: #7f8796;
+            --dim: #5a6170;
+            --amber: #f0b44c;
+            --danger: #e0564f;
+            --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            height: 100%;
+            margin: 0;
+        }
+
+        body {
+            color: var(--ink);
+            background: var(--bg);
+            font: 13px/1.35 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            overflow: hidden;
+        }
+
+        button,
+        input {
+            font: inherit;
+            color: inherit;
+        }
+
+        button {
+            cursor: pointer;
+        }
+
+        #app {
+            height: 100%;
+            display: grid;
+            grid-template-rows: 52px 30px 1fr 38px;
+        }
+
+        /* top bar */
+        .top {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 0 14px;
+            background: var(--top);
+            border-bottom: 1px solid var(--line);
+            min-width: 0;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            font-size: 17px;
+            font-weight: 500;
+            letter-spacing: 0.01em;
+            white-space: nowrap;
+        }
+
+        .brand a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        .logo {
+            display: grid;
+            grid-template-columns: 8px 8px;
+            gap: 2px;
+        }
+
+        .logo i {
+            width: 8px;
+            height: 8px;
+            border-radius: 1.5px;
+        }
+
+        #crumbs {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            min-width: 0;
+            overflow: hidden;
+            color: var(--muted);
+        }
+
+        #crumbs .sep {
+            opacity: 0.5;
+            padding: 0 4px;
+        }
+
+        #crumbs button {
+            background: none;
+            border: 1px solid transparent;
+            border-radius: 5px;
+            padding: 3px 7px;
+            color: var(--muted);
+            white-space: nowrap;
+            max-width: 180px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        #crumbs button:hover {
+            color: var(--ink);
+            background: #1f2430;
+        }
+
+        #crumbs button.cur {
+            color: var(--ink);
+            border-color: var(--line-2);
+            background: #1c212b;
+        }
+
+        .spacer {
+            flex: 1;
+        }
+
+        .seg {
+            display: flex;
+            border: 1px solid var(--line-2);
+            border-radius: 6px;
+            padding: 2px;
+            gap: 2px;
+        }
+
+        .seg button {
+            background: none;
+            border: 0;
+            border-radius: 4px;
+            padding: 5px 13px;
+            color: var(--muted);
+        }
+
+        .seg button.on {
+            background: #262c38;
+            color: var(--ink);
+        }
+
+        .check {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--muted);
+            white-space: nowrap;
+            cursor: pointer;
+        }
+
+        .check input {
+            accent-color: #8a93a5;
+            margin: 0;
+        }
+
+        .depth {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            border: 1px solid var(--line-2);
+            border-radius: 6px;
+            padding: 2px 3px 2px 9px;
+            color: var(--muted);
+            white-space: nowrap;
+        }
+
+        .depth b {
+            color: var(--ink);
+            font-weight: 500;
+            min-width: 1ch;
+            margin-right: 4px;
+        }
+
+        .depth button,
+        .ghost {
+            background: none;
+            border: 0;
+            border-radius: 4px;
+            padding: 3px 8px;
+            color: var(--muted);
+        }
+
+        .depth button:hover,
+        .ghost:hover {
+            background: #262c38;
+            color: var(--ink);
+        }
+
+        .btn {
+            border: 1px solid var(--line-2);
+            background: #1c212b;
+            border-radius: 6px;
+            padding: 6px 12px;
+            white-space: nowrap;
+        }
+
+        .btn:hover {
+            background: #242a36;
+        }
+
+        .btn.amber {
+            border-color: #7a5d2a;
+            background: #3a2f1c;
+            color: #ffd999;
+        }
+
+        .btn.amber:hover {
+            background: #4a3b22;
+        }
+
+        .btn.danger {
+            border-color: #7e2f2b;
+            background: #3b1d1c;
+            color: #ffb4ae;
+        }
+
+        .btn.danger:hover {
+            background: #4c2422;
+        }
+
+        .btn:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+
+        /* sub bar */
+        .sub {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            padding: 0 14px;
+            font-size: 12px;
+            color: var(--muted);
+            border-bottom: 1px solid var(--line);
+            white-space: nowrap;
+            overflow: hidden;
+        }
+
+        #totals b {
+            color: var(--ink);
+            font-weight: 500;
+        }
+
+        #legend {
+            display: flex;
+            gap: 14px;
+            margin-left: auto;
+        }
+
+        #legend span {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        #legend i {
+            width: 10px;
+            height: 10px;
+            border-radius: 2px;
+            display: inline-block;
+        }
+
+        #filter {
+            width: 150px;
+            background: #12161e;
+            border: 1px solid var(--line);
+            border-radius: 5px;
+            padding: 2px 8px;
+            font-size: 12px;
+            outline: none;
+        }
+
+        #filter:focus {
+            border-color: #6a5630;
+        }
+
+        /* main */
+        main {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            min-height: 0;
+        }
+
+        #stage {
+            position: relative;
+            min-width: 0;
+            min-height: 0;
+            padding: 6px;
+        }
+
+        #cv {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: default;
+        }
+
+        #panel {
+            border-left: 1px solid var(--line);
+            background: var(--panel);
+            overflow-y: auto;
+            padding: 6px 18px 20px;
+        }
+
+        #panel section {
+            padding: 16px 0;
+            border-bottom: 1px solid var(--line);
+        }
+
+        #panel section:last-child {
+            border-bottom: 0;
+        }
+
+        #panel h3 {
+            margin: 0 0 12px;
+            font-size: 11px;
+            font-weight: 500;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--muted);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        #panel h3 .amber {
+            color: var(--amber);
+            letter-spacing: 0;
+        }
+
+        .selname {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 18px;
+            word-break: break-all;
+        }
+
+        .selname .bar {
+            flex: none;
+            width: 4px;
+            height: 20px;
+            border-radius: 2px;
+        }
+
+        .path {
+            color: var(--dim);
+            font-size: 12px;
+            margin: 4px 0 8px 14px;
+            word-break: break-all;
+        }
+
+        .big {
+            font-size: 44px;
+            font-weight: 300;
+            letter-spacing: -0.01em;
+            line-height: 1.1;
+            margin: 8px 0 8px;
+        }
+
+        .big small {
+            font-size: 15px;
+            color: var(--muted);
+            font-weight: 400;
+            margin-left: 4px;
+        }
+
+        .share {
+            height: 5px;
+            background: #252b36;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .share i {
+            display: block;
+            height: 100%;
+            background: var(--amber);
+        }
+
+        .kv {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px 12px;
+            margin-top: 16px;
+        }
+
+        .kv label {
+            display: block;
+            font-size: 11px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 2px;
+        }
+
+        .kv b {
+            font-weight: 400;
+            font-size: 15px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 16px;
+        }
+
+        .actions .btn {
+            flex: 1;
+        }
+
+        kbd {
+            font: 11px var(--mono);
+            color: var(--muted);
+            border: 1px solid var(--line-2);
+            border-radius: 4px;
+            padding: 1px 5px;
+            background: #12161e;
+        }
+
+        .row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            grid-template-rows: auto auto;
+            column-gap: 10px;
+            width: 100%;
+            text-align: left;
+            background: none;
+            border: 0;
+            border-left: 2px solid var(--c, var(--amber));
+            padding: 5px 0 5px 10px;
+            margin: 0 0 8px;
+            border-radius: 0;
+        }
+
+        .row:hover {
+            background: #1c212b;
+        }
+
+        .row .n {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .row .s {
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        .row .h {
+            color: var(--dim);
+            font-size: 12px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .row .b {
+            height: 4px;
+            align-self: center;
+            width: 84px;
+            background: #252b36;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .row .b i {
+            display: block;
+            height: 100%;
+            background: var(--c, var(--amber));
+        }
+
+        .note {
+            color: var(--dim);
+            font-size: 12px;
+            margin: 10px 0 0;
+        }
+
+        .empty {
+            color: var(--dim);
+            font-size: 12px;
+        }
+
+        /* footer */
+        .keys {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 0 14px;
+            border-top: 1px solid var(--line);
+            background: var(--top);
+            color: var(--muted);
+            font-size: 12px;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+
+        .keys span {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        #status {
+            margin-left: auto;
+            color: var(--dim);
+        }
+
+        #status.flash {
+            color: var(--amber);
+        }
+
+        /* start screen */
+        #start {
+            position: absolute;
+            inset: 0;
+            display: grid;
+            place-items: center;
+            background: rgba(14, 17, 23, 0.86);
+            backdrop-filter: blur(3px);
+            z-index: 5;
+        }
+
+        #start[hidden] {
+            display: none;
+        }
+
+        #start.drag .card {
+            border-color: var(--amber);
+        }
+
+        .card {
+            width: min(520px, 92%);
+            background: var(--panel);
+            border: 1px solid var(--line-2);
+            border-radius: 12px;
+            padding: 28px;
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
+        }
+
+        .card h1 {
+            margin: 0 0 6px;
+            font-size: 22px;
+            font-weight: 500;
+        }
+
+        .card p {
+            color: var(--muted);
+            margin: 0 0 18px;
+        }
+
+        .choices {
+            display: grid;
+            gap: 10px;
+        }
+
+        .choice {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 2px 14px;
+            text-align: left;
+            border: 1px solid var(--line-2);
+            background: #1a1f29;
+            border-radius: 8px;
+            padding: 12px 14px;
+        }
+
+        .choice:hover {
+            background: #212735;
+        }
+
+        .choice:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+
+        .choice .ic {
+            grid-row: span 2;
+            font-size: 20px;
+            align-self: center;
+        }
+
+        .choice b {
+            font-weight: 500;
+        }
+
+        .choice small {
+            color: var(--muted);
+        }
+
+        .fine {
+            color: var(--dim) !important;
+            font-size: 12px;
+            margin: 16px 0 0 !important;
+        }
+
+        .fine a {
+            color: var(--muted);
+        }
+
+        #loading {
+            position: absolute;
+            inset: 0;
+            display: grid;
+            place-items: center;
+            z-index: 6;
+            background: var(--bg);
+        }
+
+        #loading[hidden] {
+            display: none;
+        }
+
+        #loading .card {
+            width: min(440px, 92%);
+        }
+
+        #loading h1 {
+            font-size: 18px;
+            word-break: break-all;
+        }
+
+        .spin {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            border: 3px solid var(--line-2);
+            border-top-color: var(--amber);
+            animation: spin 0.8s linear infinite;
+            margin-bottom: 16px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .ldpath {
+            margin-top: 16px;
+            color: var(--dim);
+            font: 11px var(--mono);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            direction: rtl;
+            text-align: left;
+        }
+
+        /* phones: stack the map above the panel and let the page scroll */
+        @media (max-width: 760px) {
+            body {
+                overflow: auto;
+            }
+
+            #app {
+                height: auto;
+                min-height: 100%;
+                grid-template-rows: auto auto auto auto;
+            }
+
+            .top {
+                flex-wrap: wrap;
+                gap: 8px 10px;
+                padding: 10px 12px;
+            }
+
+            .top .spacer {
+                display: none;
+            }
+
+            .brand {
+                margin-right: auto;
+            }
+
+            #crumbs {
+                order: 10;
+                flex-basis: 100%;
+                overflow-x: auto;
+                scrollbar-width: none;
+            }
+
+            #crumbs > * {
+                flex-shrink: 0;
+            }
+
+            #crumbs:empty {
+                display: none;
+            }
+
+            .seg button {
+                padding: 5px 10px;
+            }
+
+            .sub {
+                flex-wrap: wrap;
+                gap: 6px 12px;
+                padding: 8px 12px;
+                white-space: normal;
+            }
+
+            #filter {
+                flex: 1;
+                min-width: 120px;
+            }
+
+            #legend {
+                margin-left: 0;
+                flex-basis: 100%;
+                flex-wrap: wrap;
+                gap: 4px 12px;
+            }
+
+            main {
+                grid-template-columns: 1fr;
+            }
+
+            #stage {
+                height: 68svh;
+                min-height: 380px;
+                padding: 4px;
+            }
+
+            #panel {
+                border-left: 0;
+                border-top: 1px solid var(--line);
+                overflow: visible;
+            }
+
+            .keys > span:not(#status) {
+                display: none;
+            }
+
+            .keys {
+                padding: 10px 12px;
+            }
+
+            #status {
+                margin-left: 0;
+            }
+
+            #start,
+            #loading {
+                place-items: start center;
+                padding-top: 16px;
+                overflow-y: auto;
+            }
+
+            .card {
+                padding: 20px;
+            }
+
+            .card h1 {
+                font-size: 20px;
+            }
+        }
+
+        /* tooltip */
+        #tip {
+            position: fixed;
+            pointer-events: none;
+            z-index: 10;
+            background: #0b0d12f0;
+            border: 1px solid var(--line-2);
+            border-radius: 6px;
+            padding: 6px 9px;
+            font-size: 12px;
+            max-width: 360px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+        }
+
+        #tip b {
+            font-weight: 500;
+        }
+
+        #tip .m {
+            color: var(--muted);
+        }
+
+        #tip .p {
+            color: var(--dim);
+            word-break: break-all;
+        }
+
+        /* dialogs */
+        dialog {
+            background: var(--panel);
+            color: var(--ink);
+            border: 1px solid var(--line-2);
+            border-radius: 12px;
+            padding: 0;
+            width: min(620px, 94vw);
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+        }
+
+        dialog::backdrop {
+            background: rgba(6, 8, 12, 0.65);
+        }
+
+        dialog header {
+            padding: 18px 22px 8px;
+        }
+
+        dialog h2 {
+            margin: 0;
+            font-size: 17px;
+            font-weight: 500;
+        }
+
+        dialog .body {
+            padding: 6px 22px;
+            max-height: 55vh;
+            overflow-y: auto;
+        }
+
+        dialog footer {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 14px 22px 18px;
+            border-top: 1px solid var(--line);
+            margin-top: 8px;
+        }
+
+        dialog footer .grow {
+            flex: 1;
+            color: var(--muted);
+        }
+
+        .rv {
+            display: grid;
+            grid-template-columns: 1fr auto auto;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .rv .p {
+            color: var(--dim);
+            font-size: 12px;
+            word-break: break-all;
+        }
+
+        .keytable {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 7px 18px;
+            padding-bottom: 8px;
+        }
+
+        .keytable div:nth-child(odd) {
+            text-align: right;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <header class="top">
+            <div class="brand">
+                <span class="logo"><i style="background:#5b7fb3"></i><i style="background:#c98a4e"></i><i
+                        style="background:#57a37c"></i><i style="background:#8e6cb8"></i></span>
+                <a href="#" id="home">sizemap</a>
+            </div>
+            <nav id="crumbs"></nav>
+            <div class="spacer"></div>
+            <div class="seg" id="modes">
+                <button data-mode="size" class="on">Size</button>
+                <button data-mode="files">Files</button>
+                <button data-mode="age">Age</button>
+            </div>
+            <label class="check"><input type="checkbox" id="hidden" checked> Hidden files</label>
+            <div class="depth">Depth <b id="depthv">4</b><button id="depthm" title="Fewer levels ([)">−</button><button
+                    id="depthp" title="More levels (])">+</button></div>
+            <button class="btn" id="openBtn">Open…</button>
+        </header>
+
+        <div class="sub">
+            <span id="totals">no folder open</span>
+            <input id="filter" placeholder="/  filter by name" autocomplete="off" spellcheck="false">
+            <span id="legend"></span>
+        </div>
+
+        <main>
+            <div id="stage">
+                <canvas id="cv"></canvas>
+                <div id="start">
+                    <div class="card">
+                        <h1>What's filling this folder?</h1>
+                        <p>Pick a folder and sizemap draws every directory as a nested mosaic sized by what it holds.
+                            Everything happens in this tab; no file leaves your machine.</p>
+                        <div class="choices">
+                            <button class="choice" id="pickFs">
+                                <span class="ic">📂</span><b>Open a folder</b>
+                                <small id="pickFsNote">File System Access API: live scan, rescan, and you can delete
+                                    what you mark.</small>
+                            </button>
+                            <button class="choice" id="pickUpload">
+                                <span class="ic">🗂️</span><b>Read a folder listing</b>
+                                <small>Works in every browser, read-only. The browser may say “upload”, but nothing is
+                                    sent anywhere.</small>
+                            </button>
+                            <button class="choice" id="pickDemo">
+                                <span class="ic">✨</span><b>Try it with a made-up home folder</b>
+                                <small>Generated data, so you can look around without granting access.</small>
+                            </button>
+                        </div>
+                        <p class="fine">You can also drop a folder here. Browsers refuse some locations (your home
+                            folder itself, system folders), so pick one inside them. Inspired by
+                            <a href="https://github.com/tobi/disktree" target="_blank" rel="noopener">tobi/disktree</a>.
+                        </p>
+                    </div>
+                </div>
+                <div id="loading" hidden>
+                    <div class="card">
+                        <div class="spin"></div>
+                        <h1>Scanning <span id="ldName"></span></h1>
+                        <div class="kv" id="ldStats"></div>
+                        <div class="ldpath" id="ldPath"></div>
+                        <div class="actions"><button class="btn" id="ldStop">Stop and show what's found</button></div>
+                    </div>
+                </div>
+                <input type="file" id="uploadInput" webkitdirectory multiple hidden>
+            </div>
+            <aside id="panel"></aside>
+        </main>
+
+        <footer class="keys">
+            <span><kbd>space</kbd> mark</span>
+            <span><kbd>enter</kbd> open</span>
+            <span><kbd>⌫</kbd> up</span>
+            <span><kbd>c</kbd> review</span>
+            <span><kbd>hjkl</kbd> move</span>
+            <span><kbd>/</kbd> filter</span>
+            <span><kbd>[ ]</kbd> depth</span>
+            <span><kbd>t</kbd> mode</span>
+            <span><kbd>0</kbd> reset</span>
+            <span><kbd>r</kbd> rescan</span>
+            <span id="status"></span>
+            <span><kbd>?</kbd> all keys</span>
+        </footer>
+    </div>
+
+    <div id="tip" hidden></div>
+
+    <dialog id="review">
+        <header>
+            <h2>Review marked</h2>
+        </header>
+        <div class="body" id="rvList"></div>
+        <footer>
+            <span class="grow" id="rvTotal"></span>
+            <button class="btn" data-close>Back</button>
+            <button class="btn danger" id="rvDelete">Delete permanently…</button>
+        </footer>
+    </dialog>
+
+    <dialog id="help">
+        <header>
+            <h2>Keys</h2>
+        </header>
+        <div class="body">
+            <div class="keytable">
+                <div><kbd>space</kbd> <kbd>x</kbd></div>
+                <div>mark or unmark the tile you point at (or the selection)</div>
+                <div><kbd>⌘/ctrl</kbd>-click</div>
+                <div>mark without moving the selection</div>
+                <div><kbd>enter</kbd> / double-click</div>
+                <div>open that directory</div>
+                <div><kbd>⌫</kbd> <kbd>esc</kbd></div>
+                <div>go up one directory</div>
+                <div><kbd>←↑↓→</kbd> <kbd>hjkl</kbd></div>
+                <div>move between tiles at this level</div>
+                <div><kbd>tab</kbd></div>
+                <div>next largest sibling (<kbd>shift</kbd> for previous)</div>
+                <div><kbd>[</kbd> <kbd>]</kbd></div>
+                <div>draw fewer or more levels at once</div>
+                <div><kbd>/</kbd></div>
+                <div>filter by name: only matches keep their colour, <kbd>esc</kbd> clears</div>
+                <div><kbd>t</kbd></div>
+                <div>cycle size / file count / age</div>
+                <div><kbd>i</kbd></div>
+                <div>include or skip hidden entries</div>
+                <div><kbd>c</kbd></div>
+                <div>review the marked list</div>
+                <div><kbd>0</kbd></div>
+                <div>back to the scanned folder</div>
+                <div><kbd>r</kbd></div>
+                <div>scan again</div>
+                <div><kbd>o</kbd></div>
+                <div>open another folder</div>
+            </div>
+        </div>
+        <footer><span class="grow">Sizes are logical file sizes: the browser can't see disk blocks, clones or hard
+                links.</span><button class="btn" data-close>Close</button></footer>
+    </dialog>
+
+    <script>
+        'use strict';
+
+        // ───────────────────────── kinds & rules ─────────────────────────
+
+        // File types, by extension. A folder takes the type holding most of its bytes.
+        // [key, label, hue, sat, light]
+        const KINDS = [
+            ['image', 'Images', 145, 26, 33],
+            ['video', 'Video', 268, 28, 37],
+            ['audio', 'Audio', 322, 28, 36],
+            ['doc', 'Documents', 214, 32, 37],
+            ['archive', 'Archives', 22, 38, 35],
+            ['code', 'Code', 190, 32, 32],
+            ['binary', 'Apps & binaries', 356, 32, 35],
+            ['data', 'Data', 50, 30, 32],
+            ['other', 'Other', 222, 12, 27],
+        ];
+        const KI = Object.fromEntries(KINDS.map((k, i) => [k[0], i]));
+        const OTHER = KI.other;
+        const MAXD = 10;
+        const PAL = KINDS.map(([, , h, s, l]) =>
+            Array.from({ length: MAXD + 1 }, (_, d) => `hsl(${h} ${s}% ${Math.min(l + Math.max(0, d - 1) * 3.2, 60)}%)`));
+        const STRIP = KINDS.map(([, , h, s, l]) => `hsl(${h} ${Math.min(s + 24, 70)}% ${l + 20}%)`);
+
+        // [max age in days, label, hue, sat, light]
+        const AGES = [
+            [7, 'This week', 38, 62, 48],
+            [30, 'This month', 32, 46, 39],
+            [90, '3 months', 26, 30, 33],
+            [365, 'This year', 212, 14, 30],
+            [1095, '3 years', 220, 14, 24],
+            [Infinity, 'Older', 226, 16, 19],
+        ];
+        const AGE_PAL = AGES.map(([, , h, s, l]) =>
+            Array.from({ length: MAXD + 1 }, (_, d) => `hsl(${h} ${s}% ${Math.min(l + Math.max(0, d - 1) * 2.8, 60)}%)`));
+
+        // Folder names only decide what's reclaimable (hatched), never the colour.
+        // rc: 0 no, 1 reclaimable, 2 reclaimable when a build marker sits beside it
+        const rule = (rc, why) => ({ rc, why });
+        const DIR_RULES = {};
+        const def = (names, r) => names.split('|').forEach(n => DIR_RULES[n] = r);
+        def('worktrees', rule(0, 'worktrees'));
+        def('node_modules', rule(1, 'dependencies · reinstallable'));
+        def('.venv|venv', rule(1, 'virtualenv · recreatable'));
+        def('pods', rule(1, 'CocoaPods · reinstallable'));
+        def('.cache|cache|caches|__pycache__|.pytest_cache|.mypy_cache|.ruff_cache|.parcel-cache|.turbo|.sass-cache|.gradle|code cache|gpucache|cacheddata|shadercache|.eslintcache',
+            rule(1, 'regenerable'));
+        def('deriveddata', rule(1, 'Xcode build cache'));
+        def('.npm|.pnpm-store|.yarn', rule(1, 'package store'));
+        def('.trash|$recycle.bin', rule(1, 'in the trash'));
+        def('.next|.nuxt|.svelte-kit|.angular|.output', rule(1, 'build output'));
+        def('target|build|dist|out', rule(2, 'build output'));
+        def('.stversions', rule(1, 'sync history'));
+        const BUILD_MARKERS = new Set(['Cargo.toml', 'package.json', 'pom.xml', 'build.gradle', 'build.gradle.kts',
+            'CMakeLists.txt', 'setup.py', 'pyproject.toml', 'build.sbt', 'Makefile', 'go.mod', 'Package.swift']);
+
+        const EXT = {};
+        const ext = (list, kind) => list.split(' ').forEach(e => EXT[e] = KI[kind]);
+        ext('jpg jpeg png gif webp heic heif avif bmp ico svg tif tiff psd ai xcf raw cr2 cr3 nef arw dng orf rw2', 'image');
+        ext('mp4 mov mkv avi webm m4v wmv flv mpg mpeg 3gp mts m2ts prores', 'video');
+        ext('mp3 wav flac aac m4a ogg opus aiff aif wma alac mid midi logicx', 'audio');
+        ext('pdf doc docx xls xlsx ppt pptx odt ods odp txt md rtf pages numbers key epub mobi csv tsv tex', 'doc');
+        ext('zip tar gz tgz bz2 xz zst 7z rar dmg iso img pkg deb rpm xip msi cab appimage', 'archive');
+        ext('js mjs cjs ts tsx jsx py rs go c h cc cpp hpp m mm java kt swift rb php cs html htm css scss sass less vue svelte sh bash zsh zig lua dart ex exs hs scala sql ipynb json yaml yml toml xml gradle', 'code');
+        ext('exe dll so dylib a o obj lib bin app jar class wasm node rlib rmeta pyc pyo dex apk ipa framework ko sys', 'binary');
+        ext('db sqlite sqlite3 ldb log parquet arrow feather npy npz h5 hdf5 pt pth ckpt safetensors gguf onnx pb tfrecord pack idx vmdk vdi qcow2', 'data');
+        const ARCHIVE = new Set(['dmg', 'iso', 'zip', 'pkg', 'tar', 'gz', 'tgz', 'xz', '7z', 'rar', 'img', 'msi', 'exe', 'appimage']);
+
+        const extOf = name => {
+            const i = name.lastIndexOf('.');
+            return i > 0 ? name.slice(i + 1).toLowerCase() : '';
+        };
+
+        // ───────────────────────── tree ─────────────────────────
+
+        const S = {
+            root: null, view: null, sel: null, hover: null,
+            mode: 'size', showHidden: true, maxDepth: 4, filter: '',
+            marks: new Set(), source: null, rootHandle: null,
+            scanning: false, t0: 0, took: 0, errors: 0, tok: null,
+            lastPointer: false, worth: [], dirty: false, worthAt: 0,
+        };
+
+        function mkNode(name, parent, isDir) {
+            const hid = parent ? (parent.hid || name.charCodeAt(0) === 46) : false;
+            const n = { name, parent, isDir, hid, size: 0, mtime: 0 };
+            if (isDir) {
+                const r = DIR_RULES[name.toLowerCase()];
+                n.children = [];
+                n.files = 0; n.dirs = 0; n.vsize = 0; n.vfiles = 0; n.vdirs = 0; n.mts = 0;
+                n.tally = new Float64Array(KINDS.length);
+                n.rule = r || null;
+            } else {
+                n.kind = EXT[extOf(name)] ?? OTHER;
+            }
+            return n;
+        }
+
+        function newRoot(name) {
+            const root = mkNode(name, null, true);
+            S.root = S.view = S.sel = root;
+            S.hover = null;
+            return root;
+        }
+
+        function addDir(parent, name) {
+            const d = mkNode(name, parent, true);
+            parent.children.push(d);
+            for (let p = parent; p; p = p.parent) {
+                p.dirs++;
+                if (!d.hid) p.vdirs++;
+            }
+            S.dirty = true;
+            return d;
+        }
+
+        function addFile(parent, name, size, mtime) {
+            const f = mkNode(name, parent, false);
+            f.size = size;
+            f.mtime = mtime;
+            parent.children.push(f);
+            const k = f.kind;
+            for (let p = parent; p; p = p.parent) {
+                p.size += size;
+                p.files++;
+                if (!f.hid) { p.vsize += size; p.vfiles++; }
+                if (mtime > p.mtime) p.mtime = mtime;
+                p.mts += size * mtime;
+                p.tally[k] += size;
+            }
+            S.dirty = true;
+            return f;
+        }
+
+        function removeNode(n) {
+            const par = n.parent;
+            if (!par) return;
+            const size = n.size;
+            const files = n.isDir ? n.files : 1;
+            const dirs = n.isDir ? n.dirs + 1 : 0;
+            const vsize = n.hid ? 0 : (n.isDir ? n.vsize : n.size);
+            const vfiles = n.hid ? 0 : (n.isDir ? n.vfiles : 1);
+            const vdirs = n.hid || !n.isDir ? 0 : n.vdirs + 1;
+            const mts = n.isDir ? n.mts : n.size * n.mtime;
+            for (let p = par; p; p = p.parent) {
+                p.size -= size; p.files -= files; p.dirs -= dirs;
+                p.vsize -= vsize; p.vfiles -= vfiles; p.vdirs -= vdirs; p.mts -= mts;
+                if (n.isDir) for (let k = 0; k < p.tally.length; k++) p.tally[k] -= n.tally[k];
+                else p.tally[n.kind] -= size;
+            }
+            const i = par.children.indexOf(n);
+            if (i >= 0) par.children.splice(i, 1);
+            S.marks.delete(n);
+            if (S.view === n || isAncestor(n, S.view)) S.view = par;
+            if (S.sel === n || isAncestor(n, S.sel)) S.sel = par;
+            if (S.hover && (S.hover.n === n || isAncestor(n, S.hover.n))) S.hover = null;
+        }
+
+        const isAncestor = (a, b) => {
+            for (let p = b && b.parent; p; p = p.parent) if (p === a) return true;
+            return false;
+        };
+
+        const sizeOf = n => n.isDir ? (S.showHidden ? n.size : n.vsize) : n.size;
+        const filesOf = n => n.isDir ? (S.showHidden ? n.files : n.vfiles) : 1;
+        const dirsOf = n => n.isDir ? (S.showHidden ? n.dirs : n.vdirs) : 0;
+        const val = n => S.mode === 'files' ? filesOf(n) : sizeOf(n);
+        const visible = n => S.showHidden || n.name.charCodeAt(0) !== 46;
+
+        function kindOf(n) {
+            if (!n.isDir) return n.kind;
+            let best = OTHER, bv = 0;
+            for (let k = 0; k < n.tally.length; k++) if (n.tally[k] > bv) { bv = n.tally[k]; best = k; }
+            return best;
+        }
+
+        function isRC(n) {
+            if (!n.isDir || !n.rule || !n.rule.rc) return false;
+            if (n.rule.rc === 1) return true;
+            if (n.rcC !== undefined) return n.rcC;
+            const r = !!n.parent && n.parent.children.some(c => !c.isDir && BUILD_MARKERS.has(c.name));
+            if (!S.scanning) n.rcC = r;
+            return r;
+        }
+
+        const inRC = n => { for (let p = n; p; p = p.parent) if (isRC(p)) return p; return null; };
+        const markedAncestor = n => { for (let p = n.parent; p; p = p.parent) if (S.marks.has(p)) return p; return null; };
+
+        function pathOf(n) {
+            const parts = [];
+            for (let p = n; p; p = p.parent) parts.push(p.name);
+            return parts.reverse().join('/');
+        }
+
+        // ───────────────────────── scanning ─────────────────────────
+
+        function beginScan(source) {
+            S.tok = {};
+            S.source = source;
+            S.scanning = true;
+            S.t0 = performance.now();
+            S.errors = 0;
+            S.marks.clear();
+            S.worth = [];
+            S.worthAt = 0;
+            S.stop = false;
+            S.cur = null;
+            toastUntil = 0;
+            items = [];
+            itemOf = new Map();
+            S.hover = null;
+            hideTip();
+            $('#start').hidden = true;
+            $('#loading').hidden = false;
+            $('#panel').innerHTML = '';
+            return S.tok;
+        }
+
+        function endScan() {
+            S.scanning = false;
+            $('#loading').hidden = true;
+            S.took = performance.now() - S.t0;
+            computeWorth();
+            refresh();
+        }
+
+        async function scanFS(handle) {
+            const tok = beginScan('fs');
+            S.rootHandle = handle;
+            const root = newRoot(handle.name);
+            root.handle = handle;
+            const queue = [root];
+            let head = 0, active = 0;
+            await new Promise(resolve => {
+                const pump = () => {
+                    if (tok !== S.tok || S.stop) return resolve();
+                    while (active < 12 && head < queue.length) {
+                        const d = queue[head];
+                        queue[head++] = null;
+                        active++;
+                        readDir(d, queue, tok)
+                            .catch(() => S.errors++)
+                            .finally(() => {
+                                active--;
+                                if (!active && head >= queue.length) resolve();
+                                else pump();
+                            });
+                    }
+                };
+                pump();
+            });
+            if (tok === S.tok) endScan();
+        }
+
+        async function readDir(d, queue, tok) {
+            let batch = [];
+            S.cur = d;
+            for await (const h of d.handle.values()) {
+                if (tok !== S.tok || S.stop) return;
+                if (h.kind === 'directory') {
+                    const c = addDir(d, h.name);
+                    c.handle = h;
+                    queue.push(c);
+                } else {
+                    batch.push(h.getFile().then(f => addFile(d, h.name, f.size, f.lastModified), () => S.errors++));
+                    if (batch.length >= 64) { await Promise.all(batch); batch = []; }
+                }
+            }
+            await Promise.all(batch);
+        }
+
+        async function scanUpload(fileList) {
+            const files = [...fileList];
+            if (!files.length) return;
+            const tok = beginScan('upload');
+            S.rootHandle = null;
+            const root = newRoot(files[0].webkitRelativePath.split('/')[0] || 'folder');
+            const dirs = new Map([['', root]]);
+            for (let i = 0; i < files.length; i++) {
+                const f = files[i];
+                const parts = f.webkitRelativePath.split('/');
+                parts.shift();
+                const fname = parts.pop();
+                let key = '', d = root;
+                for (const p of parts) {
+                    key += '/' + p;
+                    let c = dirs.get(key);
+                    if (!c) { c = addDir(d, p); dirs.set(key, c); }
+                    d = c;
+                }
+                addFile(d, fname, f.size, f.lastModified);
+                if (i % 5000 === 4999) {
+                    S.cur = d;
+                    await new Promise(r => setTimeout(r));
+                    if (tok !== S.tok) return;
+                    if (S.stop) break;
+                }
+            }
+            endScan();
+        }
+
+        async function pickFolder() {
+            if (!('showDirectoryPicker' in window)) return;
+            let handle;
+            try {
+                handle = await window.showDirectoryPicker({ id: 'sizemap', mode: 'read' });
+            } catch (e) {
+                if (e.name !== 'AbortError') toast(e.message);
+                return;
+            }
+            scanFS(handle);
+        }
+
+        function rescan() {
+            if (S.source === 'fs' && S.rootHandle) scanFS(S.rootHandle);
+            else if (S.source === 'demo') genDemo();
+            else if (S.source === 'upload') $('#uploadInput').click();
+        }
+
+        // ───────────────────────── demo data ─────────────────────────
+
+        function genDemo() {
+            beginScan('demo');
+            S.rootHandle = null;
+            let seed = 20260925;
+            const R = () => {
+                seed = (seed + 0x6D2B79F5) | 0;
+                let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+                t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+                return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+            };
+            const gauss = () => Math.sqrt(-2 * Math.log(1 - R())) * Math.cos(2 * Math.PI * R());
+            const ln = (median, spread) => Math.max(1, Math.round(median * Math.exp(spread * gauss())));
+            const pick = a => a[Math.floor(R() * a.length)];
+            const int = (a, b) => a + Math.floor(R() * (b - a + 1));
+            const hex = n => Array.from({ length: n }, () => '0123456789abcdef'[int(0, 15)]).join('');
+            const KB = 1024, MB = KB * 1024, GB = MB * 1024, DAY = 864e5, now = Date.now();
+            const W = ['core', 'utils', 'api', 'render', 'parser', 'store', 'model', 'view', 'net', 'auth', 'cli',
+                'io', 'sync', 'layout', 'theme', 'db', 'queue', 'cache', 'index', 'shell', 'graph', 'tile', 'scan'];
+            const PKGS = ['react', 'lodash', 'esbuild', 'typescript', 'vite', 'rollup', 'postcss', 'eslint', 'zod',
+                'prettier', 'next', 'webpack', 'babel', 'jest', 'd3', 'three', 'sharp', 'playwright', 'electron',
+                'tailwindcss', 'axios', 'date-fns', 'rxjs', 'swc', 'turbo', 'vitest', 'undici', 'chokidar'];
+            const D = (p, name) => p.children.find(c => c.isDir && c.name === name) || addDir(p, name);
+            const F = (p, name, size, ageDays) => addFile(p, name, size, now - ageDays * DAY);
+            const many = (p, n, median, spread, exts, age, prefix) => {
+                for (let i = 0; i < n; i++) {
+                    const e = pick(exts);
+                    F(p, `${prefix || pick(W)}_${i}${e ? '.' + e : ''}`, ln(median, spread), R() * age);
+                }
+            };
+
+            const root = newRoot('you');
+
+            function project(parent, name, lang, age) {
+                const p = D(parent, name);
+                const exts = lang === 'rust' ? ['rs'] : lang === 'py' ? ['py'] : ['ts', 'tsx', 'js', 'css'];
+                const src = D(p, 'src');
+                many(src, int(10, 50), 6 * KB, 1.1, exts, age);
+                for (let i = 0; i < int(2, 6); i++) many(D(src, W[i * 3 % W.length]), int(5, 30), 5 * KB, 1.1, exts, age);
+                F(p, 'README.md', ln(4 * KB, 0.6), age);
+                const git = D(p, '.git');
+                const pack = D(D(git, 'objects'), 'pack');
+                const packs = int(1, 3);
+                for (let i = 0; i < packs; i++) {
+                    F(pack, `pack-${hex(12)}.pack`, ln(lang === 'rust' ? 180 * MB : 60 * MB, 1.3), age + R() * 200);
+                    F(pack, `pack-${hex(12)}.idx`, ln(2 * MB, 1), age + R() * 200);
+                }
+                many(D(git, 'hooks'), 12, 2 * KB, 0.4, ['sample'], 400, 'hook');
+                F(git, 'index', ln(300 * KB, 1), age);
+                if (lang === 'rust') {
+                    F(p, 'Cargo.toml', 900, age);
+                    F(p, 'Cargo.lock', ln(60 * KB, 0.5), age);
+                    const dbg = D(D(p, 'target'), 'debug');
+                    many(D(dbg, 'deps'), int(80, 300), 1.5 * MB, 1.6, ['rlib', 'rmeta', 'd', ''], age, 'lib');
+                    many(D(dbg, 'incremental'), int(20, 90), 4 * MB, 1.4, ['bin'], age, 'q');
+                    many(D(dbg, 'build'), int(10, 60), 600 * KB, 1.5, ['o', 'out'], age, 'build');
+                    if (R() < 0.5) many(D(D(p, 'target'), 'release'), int(30, 90), 3 * MB, 1.4, ['rlib', ''], age, 'rel');
+                } else if (lang === 'py') {
+                    F(p, 'pyproject.toml', 1200, age);
+                    const sp = D(D(D(D(p, '.venv'), 'lib'), 'python3.12'), 'site-packages');
+                    for (const pk of ['numpy', 'torch', 'pandas', 'scipy', 'pillow', 'requests', 'pydantic']) {
+                        many(D(sp, pk), int(10, 80), pk === 'torch' ? 9 * MB : 300 * KB, 1.4, ['py', 'so', 'pyc'], 200, pk);
+                    }
+                    many(D(src, '__pycache__'), int(10, 40), 12 * KB, 1, ['pyc'], age);
+                } else {
+                    F(p, 'package.json', ln(2 * KB, 0.4), age);
+                    const nm = D(p, 'node_modules');
+                    const n = int(40, 160);
+                    for (let i = 0; i < n; i++) {
+                        const pk = D(nm, PKGS[i % PKGS.length] + (i >= PKGS.length ? '-' + Math.floor(i / PKGS.length) : ''));
+                        many(pk, int(3, 24), 14 * KB, 1.7, ['js', 'json', 'md', 'd.ts', 'map'], 300, 'index');
+                        if (R() < 0.04) F(pk, 'binary.node', ln(60 * MB, 0.8), 300);
+                    }
+                    if (R() < 0.6) many(D(p, 'dist'), int(8, 30), 80 * KB, 1.2, ['js', 'map', 'css'], age, 'chunk');
+                    if (R() < 0.3) many(D(p, '.next'), int(30, 120), 200 * KB, 1.4, ['js', 'json', 'pack'], age, 'cache');
+                }
+            }
+
+            // code
+            const src = D(root, 'src');
+            const names = ['walgit', 'hyprland-cfg', 'runic', 'omatrack', 'crosspoint', 'telemetry-ui', 'motorsport',
+                'sizemap', 'dotfiles', 'microsandbox', 'bez', 'lasso', 'tinyhttp', 'notes-app'];
+            names.forEach((n, i) => project(src, n, ['rust', 'ts', 'py'][i % 3], R() < 0.3 ? int(1, 5) : int(10, 700)));
+            const tries = D(src, 'tries');
+            for (let i = 0; i < 16; i++) project(tries, `2026-0${int(1, 9)}-${String(int(1, 28)).padStart(2, '0')}-${pick(W)}`, pick(['rust', 'ts']), int(2, 200));
+            const gh = D(D(src, 'github.com'), 'you');
+            project(gh, 'crosspoint-reader', 'ts', 40);
+            project(gh, 'kernel-fork', 'rust', 300);
+
+            // agents
+            const codexWt = D(D(root, '.codex'), 'worktrees');
+            for (let i = 0; i < 3; i++) project(D(codexWt, hex(4)), `2026-0${int(6, 9)}-${int(10, 28)}-${pick(names)}`, 'rust', int(3, 90));
+            many(D(D(root, '.codex'), 'sessions'), 300, 400 * KB, 1.5, ['jsonl'], 90, 'rollout');
+            const cl = D(D(root, '.claude'), 'projects');
+            for (const n of names.slice(0, 8)) many(D(cl, '-Users-you-src-' + n), int(5, 40), 900 * KB, 1.6, ['jsonl'], 60, 'session');
+            many(D(D(root, '.claude'), 'shell-snapshots'), 80, 30 * KB, 1, ['sh'], 30, 'snap');
+
+            // toolchains & caches
+            const tc = D(D(root, '.rustup'), 'toolchains');
+            for (const t of ['stable-aarch64-apple-darwin', 'nightly-aarch64-apple-darwin', '1.93.0-aarch64-apple-darwin']) {
+                many(D(D(tc, t), 'lib'), int(40, 120), 8 * MB, 1.4, ['rlib', 'dylib', 'so'], 120, 'lib');
+                many(D(D(D(tc, t), 'share'), 'doc'), 300, 40 * KB, 1.2, ['html', 'js'], 120, 'doc');
+            }
+            many(D(D(D(root, '.cargo'), 'registry'), 'cache'), 600, 120 * KB, 1.3, ['crate'], 300, 'crate');
+            many(D(D(D(root, '.cargo'), 'registry'), 'src'), 900, 80 * KB, 1.3, ['rs'], 300, 'src');
+            many(D(D(root, '.npm'), '_cacache'), 1200, 150 * KB, 1.5, [''], 400, 'content');
+            for (const v of ['v20.18.0', 'v22.11.0', 'v24.3.0']) many(D(D(D(root, '.nvm'), 'versions'), v), 200, 400 * KB, 1.6, ['js', 'node', 'h'], 200, 'node');
+            const cache = D(root, '.cache');
+            const hf = D(D(cache, 'huggingface'), 'hub');
+            for (const m of ['models--qwen--Qwen3-8B', 'models--mistral--Ministral-8B', 'models--black-forest-labs--FLUX.1']) {
+                const snap = D(D(D(hf, m), 'snapshots'), hex(10));
+                for (let i = 1; i <= int(2, 4); i++) F(snap, `model-0000${i}.safetensors`, ln(4.2 * GB, 0.3), int(10, 200));
+                F(snap, 'config.json', 2 * KB, 100);
+            }
+            many(D(cache, 'pip'), 800, 300 * KB, 1.6, ['whl', ''], 300, 'pkg');
+            many(D(cache, 'uv'), 900, 250 * KB, 1.6, ['whl', ''], 100, 'pkg');
+            many(D(cache, 'go-build'), 1500, 80 * KB, 1.5, [''], 200, 'obj');
+            many(D(cache, 'puppeteer'), 30, 20 * MB, 1.2, [''], 300, 'chrome');
+            const lib = D(root, 'Library');
+            const lc = D(lib, 'Caches');
+            for (const a of ['com.spotify.client', 'Google', 'com.apple.Safari', 'Homebrew', 'com.figma.Desktop', 'pnpm'])
+                many(D(lc, a), int(50, 400), ln(400 * KB, 0.6), 1.7, [''], 60, 'data');
+            const as = D(lib, 'Application Support');
+            for (const a of ['Slack', 'Code', 'Google', 'discord', 'Arc', 'Steam'])
+                many(D(as, a), int(40, 300), ln(1 * MB, 0.7), 1.7, ['db', 'log', 'json', 'ldb', ''], 400, 'store');
+            many(D(D(D(lib, 'Developer'), 'Xcode'), 'DerivedData'), 800, 2 * MB, 1.6, ['o', 'swiftmodule', 'pcm'], 90, 'build');
+            many(D(D(D(lib, 'Developer'), 'CoreSimulator'), 'Devices'), 200, 30 * MB, 1.5, ['img', 'db'], 400, 'dev');
+            many(D(lib, 'Mail'), 1500, 90 * KB, 1.8, ['emlx'], 1500, 'msg');
+
+            // media & documents
+            const pics = D(root, 'Pictures');
+            const orig = D(D(pics, 'Photos Library.photoslibrary'), 'originals');
+            for (const h of '0123456789ABCDEF') many(D(orig, h), int(80, 160), 3.2 * MB, 0.6, ['heic', 'jpeg', 'mov'], 1800, 'IMG');
+            many(D(pics, 'Screenshots'), 300, 900 * KB, 0.6, ['png'], 400, 'Screenshot');
+            many(D(root, 'Movies'), 24, 1.6 * GB, 0.8, ['mov', 'mp4', 'mkv'], 1200, 'clip');
+            const music = D(root, 'Music');
+            for (let i = 0; i < 40; i++) many(D(music, `Album ${i + 1}`), int(8, 16), 9 * MB, 0.4, ['flac', 'mp3', 'm4a'], 2500, 'track');
+            const docs = D(root, 'Documents');
+            for (const y of ['2023', '2024', '2025', '2026']) many(D(D(docs, 'Taxes'), y), int(10, 40), 500 * KB, 1.2, ['pdf', 'xlsx'], (2026 - +y) * 365 + 30, 'doc');
+            many(D(docs, 'Papers'), 120, 2 * MB, 1, ['pdf'], 900, 'paper');
+            many(D(D(docs, 'collection'), 'IMSA_2026'), 200, 60 * MB, 1.2, ['mp4', 'jpg'], 180, 'race');
+            many(D(root, 'Desktop'), 60, 1.2 * MB, 1, ['png', 'pdf', 'txt'], 60, 'thing');
+            const dl = D(root, 'Downloads');
+            for (const n of ['Xcode_27.xip', 'Docker.dmg', 'ubuntu-26.04-desktop.iso', 'Blender-5.1.dmg', 'Figma.dmg', 'dataset.zip'])
+                F(dl, n, ln(n.startsWith('Xcode') ? 9 * GB : 900 * MB, 0.4), int(20, 500));
+            many(dl, 180, 3 * MB, 1.8, ['pdf', 'zip', 'png', 'csv', 'epub'], 900, 'download');
+
+            // synced
+            const drop = D(root, 'Dropbox');
+            many(D(drop, 'Camera Uploads'), 900, 3 * MB, 0.7, ['jpg', 'heic', 'mp4'], 1500, 'IMG');
+            many(D(drop, 'Shared'), 200, 2 * MB, 1.4, ['pdf', 'docx', 'key'], 800, 'shared');
+            const sync = D(root, 'Sync');
+            many(D(sync, 'Telemetry'), 400, 40 * MB, 1, ['ld', 'csv', 'mp4'], 200, 'session');
+            many(D(sync, '.stversions'), 250, 30 * MB, 1, ['ld', 'mp4'], 300, 'old');
+
+            // odds and ends
+            many(D(root, '.Trash'), 30, 150 * MB, 1.3, ['mov', 'dmg', 'zip'], 60, 'deleted');
+            F(root, '.zsh_history', 2 * MB, 0);
+            F(root, '.DS_Store', 12 * KB, 3);
+            many(D(D(root, '.local'), 'share'), 200, 1 * MB, 1.6, [''], 300, 'data');
+            F(D(D(D(root, 'Library'), 'Containers'), 'com.docker.docker'), 'Docker.raw', 14 * GB, 0);
+
+            endScan();
+        }
+
+        // ───────────────────────── treemap layout ─────────────────────────
+
+        const cv = document.getElementById('cv');
+        const ctx = cv.getContext('2d');
+        const base = document.createElement('canvas');
+        const bctx = base.getContext('2d');
+        let W = 0, H = 0, dpr = 1;
+        let items = [], itemOf = new Map(), anim = null, viewInRC = false;
+        const MIN_AREA = 18, MAX_KIDS = 600;
+
+        function squarify(vals, total, x, y, w, h) {
+            const out = new Array(vals.length);
+            const scale = (w * h) / total;
+            let i = 0;
+            const n = vals.length;
+            while (i < n) {
+                const side = Math.min(w, h);
+                const s2 = side * side;
+                let sum = 0, mn = Infinity, mx = 0, j = i, best = Infinity;
+                while (j < n) {
+                    const a = vals[j] * scale;
+                    const ns = sum + a, nmn = Math.min(mn, a), nmx = Math.max(mx, a);
+                    const worst = Math.max(s2 * nmx / (ns * ns), (ns * ns) / (s2 * nmn));
+                    if (j > i && worst > best) break;
+                    best = worst; sum = ns; mn = nmn; mx = nmx; j++;
+                }
+                if (w >= h) {
+                    const cw = h > 0 ? sum / h : 0;
+                    let yy = y;
+                    for (let k = i; k < j; k++) {
+                        const hh = cw > 0 ? vals[k] * scale / cw : 0;
+                        out[k] = [x, yy, cw, hh];
+                        yy += hh;
+                    }
+                    x += cw; w -= cw;
+                } else {
+                    const rh = w > 0 ? sum / w : 0;
+                    let xx = x;
+                    for (let k = i; k < j; k++) {
+                        const ww = rh > 0 ? vals[k] * scale / rh : 0;
+                        out[k] = [xx, y, ww, rh];
+                        xx += ww;
+                    }
+                    y += rh; h -= rh;
+                }
+                i = j;
+            }
+            return out;
+        }
+
+        const matches = n => !!S.filter && n.name.toLowerCase().includes(S.filter);
+
+        function layoutKids(n, x, y, w, h, d, m, rc) {
+            if (w < 2 || h < 2) return;
+            const arr = [];
+            let total = 0;
+            for (const c of n.children) {
+                if (!visible(c)) continue;
+                const v = val(c);
+                if (v > 0) { arr.push({ c, v }); total += v; }
+            }
+            if (!total) return;
+            arr.sort((a, b) => b.v - a.v);
+            const minV = total * MIN_AREA / (w * h);
+            const vals = [], nodes = [];
+            let rest = null;
+            for (const e of arr) {
+                if (!rest && nodes.length < MAX_KIDS && e.v >= minV) {
+                    vals.push(e.v);
+                    nodes.push(e.c);
+                } else {
+                    if (!rest) rest = { rest: true, parent: n, name: '', count: 0, size: 0, files: 0, v: 0, isDir: false };
+                    rest.count++;
+                    rest.v += e.v;
+                    rest.size += sizeOf(e.c);
+                    rest.files += filesOf(e.c);
+                }
+            }
+            if (rest) {
+                rest.name = `${rest.count.toLocaleString()} smaller`;
+                vals.push(rest.v);
+                nodes.push(rest);
+            }
+            const rects = squarify(vals, total, x, y, w, h);
+            for (let i = 0; i < nodes.length; i++) {
+                const r = rects[i];
+                const x0 = Math.round(r[0]), y0 = Math.round(r[1]);
+                const x1 = Math.round(r[0] + r[2]), y1 = Math.round(r[1] + r[3]);
+                if (x1 - x0 < 1 || y1 - y0 < 1) continue;
+                const c = nodes[i];
+                place(c, x0, y0, x1 - x0, y1 - y0, d, m || (!c.rest && matches(c)), rc);
+            }
+        }
+
+        function place(n, x, y, w, h, d, m, rc) {
+            const it = { n, x, y, w, h, d, m, head: 0, rcTop: false };
+            items.push(it);
+            if (n.rest) return;
+            itemOf.set(n, it);
+            if (!n.isDir) return;
+            it.rcTop = !rc && isRC(n);
+            if (d > S.maxDepth || w < 8 || h < 8) return;
+            const pad = d === 1 ? 3 : 2;
+            if (w >= 44 && h >= 36) it.head = d === 1 ? 20 : 16;
+            const top = it.head || pad;
+            layoutKids(n, x + pad, y + top, w - 1 - pad * 2, h - 1 - top - pad, d + 1, m, rc || it.rcTop);
+        }
+
+        function relayout() {
+            items = [];
+            itemOf = new Map();
+            if (!S.view || S.scanning) return;
+            viewInRC = !!inRC(S.view);
+            layoutKids(S.view, 0, 0, W, H, 1, matches(S.view) && S.view !== S.root, viewInRC);
+            drawScene(bctx, true);
+        }
+
+        // ───────────────────────── drawing ─────────────────────────
+
+        const FONT = '11px ui-sans-serif, system-ui, -apple-system, sans-serif';
+        const FONT_HEAD = '500 12px ui-sans-serif, system-ui, -apple-system, sans-serif';
+        const hatch = (() => {
+            const c = document.createElement('canvas');
+            c.width = c.height = 7;
+            const p = c.getContext('2d');
+            p.strokeStyle = 'rgba(255,255,255,0.12)';
+            p.lineWidth = 1.1;
+            p.beginPath();
+            p.moveTo(0, 7); p.lineTo(7, 0);
+            p.moveTo(-1, 1); p.lineTo(1, -1);
+            p.moveTo(6, 8); p.lineTo(8, 6);
+            p.stroke();
+            return ctx.createPattern(c, 'repeat');
+        })();
+
+        const widths = new Map();
+        function textW(c, s) {
+            const key = c.font + '\u0000' + s;
+            let v = widths.get(key);
+            if (v === undefined) {
+                v = c.measureText(s).width;
+                if (widths.size > 30000) widths.clear();
+                widths.set(key, v);
+            }
+            return v;
+        }
+
+        function fit(c, s, max) {
+            if (max < 10) return '';
+            if (textW(c, s) <= max) return s;
+            let lo = 0, hi = s.length;
+            while (lo < hi) {
+                const mid = (lo + hi + 1) >> 1;
+                if (textW(c, s.slice(0, mid) + '…') <= max) lo = mid; else hi = mid - 1;
+            }
+            return lo >= 3 ? s.slice(0, lo) + '…' : '';
+        }
+
+        function ageBucket(mtime) {
+            const days = (Date.now() - mtime) / 864e5;
+            for (let i = 0; i < AGES.length; i++) if (days < AGES[i][0]) return i;
+            return AGES.length - 1;
+        }
+
+        // a folder's age is the size-weighted mean of its files, so one fresh file doesn't paint it all "new"
+        const ageOf = n => n.isDir ? (n.size > 0 ? n.mts / n.size : n.mtime) : n.mtime;
+
+        function tileColor(it) {
+            const d = Math.min(it.d, MAXD);
+            if (it.n.rest) return '#1f242d';
+            if (S.filter && !it.m) return d % 2 ? '#1d2027' : '#22262e';
+            if (S.mode === 'age') return AGE_PAL[ageBucket(ageOf(it.n))][d];
+            return PAL[kindOf(it.n)][d];
+        }
+
+        function drawScene(c, isBase) {
+            if (isBase) {
+                c.setTransform(dpr, 0, 0, dpr, 0, 0);
+                c.fillStyle = '#0e1117';
+                c.fillRect(0, 0, W, H);
+            }
+            const labelled = S.maxDepth;
+            for (const it of items) {
+                const { n, x, y, w, h, d } = it;
+                c.fillStyle = tileColor(it);
+                c.fillRect(x, y, Math.max(1, w - 1), Math.max(1, h - 1));
+                if (n.rest) continue;
+                if (d === 1 && w > 6 && (!S.filter || it.m)) {
+                    c.fillStyle = S.mode === 'age' ? AGE_PAL[ageBucket(ageOf(n))][6] : STRIP[kindOf(n)];
+                    c.fillRect(x, y, w - 1, 2);
+                }
+                if (d > labelled) continue;
+                const dimmed = S.filter && !it.m;
+                if (it.head) {
+                    const sz = fmtShort(n);
+                    const ty = y + it.head - (d === 1 ? 6 : 4);
+                    if (d === 1) {
+                        c.font = FONT;
+                        const sw = textW(c, sz);
+                        c.fillStyle = dimmed ? 'rgba(210,215,225,0.25)' : 'rgba(210,215,225,0.55)';
+                        if (w > sw + 60) c.fillText(sz, x + w - 7 - sw, ty);
+                        c.font = FONT_HEAD;
+                        c.fillStyle = dimmed ? 'rgba(230,233,240,0.35)' : 'rgba(236,239,245,0.92)';
+                        c.fillText(fit(c, n.name, w - (w > sw + 60 ? sw + 22 : 12)), x + 6, ty);
+                    } else {
+                        c.font = FONT;
+                        const nm = fit(c, n.name, w - 10);
+                        c.fillStyle = dimmed ? 'rgba(230,233,240,0.35)' : 'rgba(236,239,245,0.88)';
+                        c.fillText(nm, x + 5, ty);
+                        const nw = textW(c, nm);
+                        if (nm === n.name && w - nw - 10 > textW(c, sz) + 8) {
+                            c.fillStyle = 'rgba(210,215,225,0.45)';
+                            c.fillText(sz, x + 5 + nw + 6, ty);
+                        }
+                    }
+                } else if (w >= 30 && h >= 16) {
+                    c.font = FONT;
+                    c.fillStyle = dimmed ? 'rgba(230,233,240,0.3)' : 'rgba(236,239,245,0.85)';
+                    c.fillText(fit(c, n.name, w - 9), x + 4, y + 12);
+                    if (h >= 29) {
+                        c.fillStyle = 'rgba(210,215,225,0.45)';
+                        c.fillText(fit(c, fmtShort(n), w - 9), x + 4, y + 25);
+                    }
+                }
+            }
+            // overlays: reclaimable hatch, then marks on top
+            c.fillStyle = hatch;
+            if (viewInRC) c.fillRect(0, 0, W, H);
+            else for (const it of items) if (it.rcTop) c.fillRect(it.x, it.y, it.w - 1, it.h - 1);
+            for (const it of items) {
+                if (!S.marks.has(it.n)) continue;
+                c.fillStyle = 'rgba(224,86,79,0.42)';
+                c.fillRect(it.x, it.y, it.w - 1, it.h - 1);
+                c.strokeStyle = 'rgba(255,120,110,0.9)';
+                c.lineWidth = 1.5;
+                c.strokeRect(it.x + 0.75, it.y + 0.75, it.w - 2.5, it.h - 2.5);
+            }
+            if (!items.length && S.root && !S.scanning) {
+                c.font = FONT_HEAD;
+                c.fillStyle = '#5a6170';
+                c.textAlign = 'center';
+                c.fillText('Nothing to show here', W / 2, H / 2);
+                c.textAlign = 'start';
+            }
+        }
+
+        function draw() {
+            if (anim) return;
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.drawImage(base, 0, 0);
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            const h = S.hover;
+            if (h && S.lastPointer && h.n !== S.sel) {
+                ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(h.x + 0.5, h.y + 0.5, h.w - 2, h.h - 2);
+            }
+            const s = itemOf.get(S.sel);
+            if (s && S.sel !== S.view) {
+                ctx.strokeStyle = '#f0b44c';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(s.x + 1, s.y + 1, s.w - 3, s.h - 3);
+            }
+        }
+
+        let drawQueued = false;
+        const queueDraw = () => {
+            if (drawQueued) return;
+            drawQueued = true;
+            requestAnimationFrame(() => { drawQueued = false; draw(); });
+        };
+
+        function animate() {
+            if (!anim) return;
+            const t = Math.min(1, (performance.now() - anim.t0) / anim.dur);
+            const e = 1 - Math.pow(1 - t, 3);
+            const { A, B, Sr } = anim;
+            const L = [A[0] + (B[0] - A[0]) * e, A[1] + (B[1] - A[1]) * e, A[2] + (B[2] - A[2]) * e, A[3] + (B[3] - A[3]) * e];
+            const sx = L[2] / Sr[2], sy = L[3] / Sr[3];
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            ctx.fillStyle = '#0e1117';
+            ctx.fillRect(0, 0, W, H);
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(L[0], L[1], L[2], L[3]);
+            ctx.clip();
+            ctx.transform(sx, 0, 0, sy, L[0] - Sr[0] * sx, L[1] - Sr[1] * sy);
+            drawScene(ctx, false);
+            ctx.restore();
+            if (t < 1) requestAnimationFrame(animate);
+            else finishAnim();
+        }
+
+        function finishAnim() {
+            if (!anim) return;
+            anim = null;
+            if (S.dirty) refresh(); else draw();
+        }
+
+        function startAnim(a) {
+            const me = anim = { ...a, t0: performance.now(), dur: 240 };
+            requestAnimationFrame(animate);
+            // rAF pauses in background tabs; never let an animation hold the UI hostage
+            setTimeout(() => { if (anim === me) finishAnim(); }, me.dur + 120);
+        }
+
+        function resize() {
+            const r = cv.getBoundingClientRect();
+            dpr = window.devicePixelRatio || 1;
+            W = Math.max(1, Math.floor(r.width));
+            H = Math.max(1, Math.floor(r.height));
+            cv.width = base.width = Math.round(W * dpr);
+            cv.height = base.height = Math.round(H * dpr);
+            relayout();
+            draw();
+        }
+        new ResizeObserver(resize).observe(cv);
+
+        // ───────────────────────── formatting ─────────────────────────
+
+        const UNITS = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB'];
+        function bytesParts(b) {
+            let i = 0;
+            while (b >= 1024 && i < UNITS.length - 1) { b /= 1024; i++; }
+            return [i === 0 ? String(Math.round(b)) : b < 10 ? b.toFixed(1) : String(Math.round(b)), UNITS[i]];
+        }
+        const fmtB = b => bytesParts(b).join(' ');
+        const fmtBTight = b => bytesParts(b).join('');
+        function fmtN(n) {
+            if (n < 1000) return String(n);
+            if (n < 1e6) return (n / 1e3).toFixed(n < 1e4 ? 1 : 0).replace(/\.0$/, '') + 'k';
+            return (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
+        }
+        const fmtShort = n => S.mode === 'files' ? fmtN(n.rest ? n.files : filesOf(n)) + (n.isDir || n.rest ? ' files' : '') : fmtBTight(n.rest ? n.size : sizeOf(n));
+        function fmtAgo(t) {
+            if (!t) return '—';
+            const s = (Date.now() - t) / 1000;
+            if (s < 60) return 'just now';
+            const steps = [[60, 'minute'], [3600, 'hour'], [86400, 'day'], [2592000, 'month'], [31536000, 'year']];
+            let unit = steps[0];
+            for (const st of steps) if (s >= st[0]) unit = st;
+            const v = Math.floor(s / unit[0]);
+            return `${v} ${unit[1]}${v === 1 ? '' : 's'} ago`;
+        }
+        const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+        const $ = q => document.querySelector(q);
+
+        // ───────────────────────── chrome: crumbs, totals, legend, panel ─────────────────────────
+
+        function renderCrumbs() {
+            const el = $('#crumbs');
+            if (!S.view) { el.innerHTML = ''; return; }
+            const chain = [];
+            for (let p = S.view; p; p = p.parent) chain.unshift(p);
+            crumbNodes = chain;
+            el.innerHTML = chain.map((n, i) =>
+                `<span class="sep">/</span><button data-i="${i}" class="${n === S.view ? 'cur' : ''}" title="${esc(pathOf(n))}">${esc(n.name)}</button>`).join('');
+            el.scrollLeft = el.scrollWidth;
+        }
+        let crumbNodes = [];
+        $('#crumbs').addEventListener('click', e => {
+            const b = e.target.closest('button');
+            if (b) navigate(crumbNodes[+b.dataset.i]);
+        });
+
+        function renderTotals() {
+            const el = $('#totals');
+            if (!S.root) { el.textContent = 'no folder open'; return; }
+            const r = S.root;
+            let s = `<b>${fmtB(sizeOf(r))}</b> · ${fmtN(filesOf(r))} files · ${fmtN(dirsOf(r))} dirs`;
+            if (S.errors) s += ` · <span title="Entries the browser wouldn't let us read">${fmtN(S.errors)} unreadable</span>`;
+            if (S.filter) s += ` · filter “${esc(S.filter)}”`;
+            el.innerHTML = s;
+        }
+
+        function renderLegend() {
+            const el = $('#legend');
+            if (S.mode === 'age') {
+                el.innerHTML = AGES.map((a, i) => `<span><i style="background:${AGE_PAL[i][3]}"></i>${a[1]}</span>`).join('');
+            } else {
+                el.innerHTML = `<span><i style="background:#3a3f4a url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%224%22 height=%224%22><path d=%22M0 4L4 0%22 stroke=%22%23aaa%22 stroke-width=%221%22/></svg>')"></i>Reclaimable</span>` +
+                    KINDS.slice(0, -1).map((k, i) => `<span><i style="background:${STRIP[i]}"></i>${k[1]}</span>`).join('');
+            }
+        }
+
+        let panelNodes = [];
+        const ref = n => { panelNodes.push(n); return panelNodes.length - 1; };
+
+        function renderPanel() {
+            const el = $('#panel');
+            panelNodes = [];
+            if (!S.root) { el.innerHTML = ''; return; }
+            const n = S.sel || S.view;
+            const k = kindOf(n);
+            const tot = val(S.root) || 1;
+            const share = val(n) / tot;
+            const rc = inRC(n);
+            const ma = markedAncestor(n);
+            const [num, unit] = S.mode === 'files' ? [fmtN(filesOf(n)), filesOf(n) === 1 ? 'file' : 'files'] : bytesParts(sizeOf(n));
+            const kindLabel = (n.isDir ? 'Mostly ' + KINDS[k][1].toLowerCase() : KINDS[k][1]) + (rc ? ' · reclaimable' : '');
+            let h = `<section><h3>Selection</h3>
+                <div class="selname"><span class="bar" style="background:${STRIP[k]}"></span>${esc(n.name)}</div>
+                <div class="path">${n.parent ? esc(pathOf(n.parent)) : 'scanned folder'}</div>
+                <div class="big">${num}<small>${unit}</small></div>
+                <div class="share"><i style="width:${(share * 100).toFixed(2)}%"></i></div>
+                <div class="kv">
+                  <div><label>Of scan</label><b>${share >= 0.995 ? '100' : (share * 100).toFixed(share < 0.1 ? 1 : 0)}%</b></div>
+                  <div><label>${S.mode === 'files' ? 'Size' : 'Files'}</label><b>${S.mode === 'files' ? fmtB(sizeOf(n)) : fmtN(filesOf(n))}</b></div>
+                  <div><label>Last write</label><b>${fmtAgo(n.mtime)}</b></div>
+                  ${S.mode === 'age' && n.isDir ? `<div><label>Typical age</label><b>${fmtAgo(ageOf(n)).replace(' ago', '')}</b></div>` : ''}
+                  <div><label>Type</label><b>${esc(kindLabel)}</b></div>
+                  ${n.isDir ? `<div><label>Folders</label><b>${fmtN(dirsOf(n))}</b></div>` : ''}
+                  ${rc && rc.rule.why ? `<div><label>Why</label><b>${esc(rc.rule.why)}</b></div>` : ''}
+                </div>
+                <div class="actions">
+                  ${n.isDir && n !== S.view ? `<button class="btn" data-act="open">Open <kbd>⏎</kbd></button>` : ''}
+                  ${n === S.root ? '' : ma
+                    ? `<button class="btn" data-act="unmark" data-i="${ref(ma)}">Unmark ${esc(ma.name)}</button>`
+                    : `<button class="btn ${S.marks.has(n) ? 'danger' : ''}" data-act="mark">${S.marks.has(n) ? 'Unmark' : 'Mark'} <kbd>␣</kbd></button>`}
+                </div>
+            </section>`;
+
+            const worth = S.worth.filter(x => visibleAll(x.n)).slice(0, 12);
+            const wTotal = worth.reduce((a, x) => a + sizeOf(x.n), 0);
+            const wMax = worth.length ? sizeOf(worth[0].n) : 1;
+            h += `<section><h3>Worth a look <span class="amber">${worth.length ? fmtB(wTotal) : ''}</span></h3>`;
+            h += worth.length ? worth.map(x => {
+                const s = sizeOf(x.n);
+                return `<button class="row" data-act="reveal" data-i="${ref(x.n)}" style="--c:${S.marks.has(x.n) ? 'var(--danger)' : 'var(--amber)'}">
+                    <span class="n">${esc(shortPath(x.n))}</span><span class="s">${fmtB(s)}</span>
+                    <span class="h">${esc(x.why)}</span><span class="b"><i style="width:${(s / wMax * 100).toFixed(1)}%"></i></span></button>`;
+            }).join('') : `<div class="empty">${S.scanning ? 'Looking…' : 'Nothing obviously disposable. Tidy!'}</div>`;
+            h += `</section>`;
+
+            const marks = [...S.marks];
+            const mTotal = marks.reduce((a, m) => a + m.size, 0);
+            h += `<section><h3>Marked <span class="amber">${marks.length ? fmtB(mTotal) : ''}</span></h3>`;
+            if (marks.length) {
+                h += marks.slice(0, 6).map(m => `<button class="row" data-act="reveal" data-i="${ref(m)}" style="--c:var(--danger)">
+                    <span class="n">${esc(shortPath(m))}</span><span class="s">${fmtB(m.size)}</span></button>`).join('');
+                if (marks.length > 6) h += `<div class="empty">and ${marks.length - 6} more</div>`;
+                h += `<div class="actions"><button class="btn amber" data-act="review">Review ${marks.length} marked <kbd>c</kbd></button></div>`;
+            } else {
+                h += `<div class="empty">Press <kbd>space</kbd> on anything you'd delete. Nothing happens until you review.</div>`;
+            }
+            h += `</section>`;
+
+            const src = { fs: 'File System Access', upload: 'folder listing (read-only)', demo: 'generated demo data' }[S.source];
+            h += `<section><h3>Scan</h3>
+                <div class="kv">
+                  <div><label>Folder</label><b>${esc(S.root.name)}</b></div>
+                  <div><label>${S.scanning ? 'Elapsed' : 'Took'}</label><b>${((S.scanning ? performance.now() - S.t0 : S.took) / 1000).toFixed(1)} s</b></div>
+                  <div><label>Entries</label><b>${fmtN(S.root.files + S.root.dirs)}</b></div>
+                  <div><label>Source</label><b style="font-size:13px">${src}</b></div>
+                </div>
+                <p class="note">Sizes are logical file sizes. The browser can't see disk blocks, sparse files, clones or hard links, so totals can differ from <code>du</code>.</p>
+            </section>`;
+            el.innerHTML = h;
+        }
+
+        const visibleAll = n => S.showHidden || !n.hid;
+
+        function shortPath(n) {
+            const parts = [];
+            for (let p = n; p && p !== S.root; p = p.parent) parts.unshift(p.name);
+            if (parts.length > 3) return parts[0] + '/…/' + parts.slice(-2).join('/');
+            return parts.join('/') || n.name;
+        }
+
+        $('#panel').addEventListener('click', e => {
+            const b = e.target.closest('[data-act]');
+            if (!b) return;
+            const node = b.dataset.i != null ? panelNodes[+b.dataset.i] : null;
+            switch (b.dataset.act) {
+                case 'open': if (S.sel && S.sel.isDir) navigate(S.sel); break;
+                case 'mark': toggleMark(S.sel); break;
+                case 'unmark': toggleMark(node); break;
+                case 'reveal': reveal(node); break;
+                case 'review': openReview(); break;
+            }
+        });
+
+        function computeWorth() {
+            S.worthAt = performance.now();
+            if (!S.root) { S.worth = []; return; }
+            const out = [];
+            const minArchive = 100 * 1024 * 1024;
+            const stack = [S.root];
+            while (stack.length) {
+                const n = stack.pop();
+                for (const c of n.children) {
+                    if (!c.isDir) {
+                        if (c.size >= minArchive && ARCHIVE.has(extOf(c.name))) out.push({ n: c, why: 'installer / archive' });
+                        continue;
+                    }
+                    if (isRC(c)) { out.push({ n: c, why: c.rule.why || 'regenerable' }); continue; }
+                    if (c.rule && c.rule.why === 'worktrees') {
+                        const wts = c.children.filter(x => x.isDir);
+                        const oldest = wts.reduce((a, x) => Math.min(a, x.mtime || Infinity), Infinity);
+                        out.push({ n: c, why: `${wts.length} worktree${wts.length === 1 ? '' : 's'}` + (isFinite(oldest) ? ` · oldest ${fmtAgo(oldest)}` : '') });
+                        continue;
+                    }
+                    stack.push(c);
+                }
+            }
+            out.sort((a, b) => b.n.size - a.n.size);
+            S.worth = out.slice(0, 40);
+        }
+
+        // ───────────────────────── interaction ─────────────────────────
+
+        function renderLoading() {
+            const r = S.root;
+            if (!r) return;
+            $('#ldName').textContent = r.name;
+            $('#ldStats').innerHTML = `
+                <div><label>Files</label><b>${fmtN(r.files)}</b></div>
+                <div><label>Folders</label><b>${fmtN(r.dirs)}</b></div>
+                <div><label>Size so far</label><b>${fmtB(r.size)}</b></div>
+                <div><label>Elapsed</label><b>${((performance.now() - S.t0) / 1000).toFixed(1)} s</b></div>`;
+            $('#ldPath').textContent = S.cur ? pathOf(S.cur) : '';
+            $('#ldStop').hidden = S.source === 'demo';
+        }
+
+        function refresh() {
+            if (S.scanning) { S.dirty = false; renderLoading(); renderTotals(); status(); return; }
+            if (anim) { S.dirty = true; return; }
+            S.dirty = false;
+            relayout();
+            draw();
+            renderCrumbs();
+            renderTotals();
+            renderLegend();
+            renderPanel();
+            status();
+        }
+
+        setInterval(() => {
+            if (S.dirty) refresh();
+            else if (S.scanning) { renderLoading(); status(); }
+        }, 250);
+
+        function select(n) {
+            if (!n || n.rest) return;
+            S.sel = n;
+            draw();
+            renderPanel();
+        }
+
+        function navigate(target, selNode) {
+            if (!target) return;
+            if (!target.isDir) target = target.parent;
+            if (target === S.view) { if (selNode) select(selNode); return; }
+            anim = null;
+            const old = S.view;
+            const oldIt = itemOf.get(target);
+            S.view = target;
+            S.sel = selNode || target;
+            S.hover = null;
+            hideTip();
+            relayout();
+            const full = [0, 0, W, H];
+            let a = null;
+            if (isAncestor(old, target) && oldIt) {
+                a = { Sr: full, A: [oldIt.x, oldIt.y, oldIt.w, oldIt.h], B: full };
+            } else if (isAncestor(target, old)) {
+                let n = old, it = null;
+                while (n && n !== target && !(it = itemOf.get(n))) n = n.parent;
+                if (it) { const r = [it.x, it.y, it.w, it.h]; a = { Sr: r, A: full, B: r }; }
+            }
+            renderCrumbs();
+            renderPanel();
+            if (a && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                startAnim(a);
+            } else draw();
+        }
+
+        function up() {
+            if (S.view && S.view.parent) navigate(S.view.parent, S.view);
+        }
+
+        function reveal(n) {
+            if (!n) return;
+            if (!(n === S.view || isAncestor(S.view, n))) navigate(n.parent, n);
+            else if (!itemOf.get(n)) navigate(n.parent, n);
+            else select(n);
+        }
+
+        function toggleMark(n) {
+            if (!n || n.rest || n === S.root) return;
+            if (S.marks.has(n)) S.marks.delete(n);
+            else {
+                const ma = markedAncestor(n);
+                if (ma) { toast(`Already going with ${ma.name}`); return; }
+                for (const m of [...S.marks]) if (isAncestor(n, m)) S.marks.delete(m);
+                S.marks.add(n);
+            }
+            drawScene(bctx, true);
+            draw();
+            renderPanel();
+        }
+
+        const keyTarget = () => (S.lastPointer && S.hover && !S.hover.n.rest) ? S.hover.n : S.sel;
+
+        function move(dx, dy) {
+            S.lastPointer = false;
+            const cur = itemOf.get(S.sel);
+            if (!cur || S.sel === S.view) {
+                const first = items.find(it => it.d === 1 && !it.n.rest);
+                if (first) select(first.n);
+                return;
+            }
+            const cx = cur.x + cur.w / 2, cy = cur.y + cur.h / 2;
+            let best = null, bs = Infinity;
+            for (const it of items) {
+                if (it === cur || it.n.rest || it.n.parent !== cur.n.parent) continue;
+                const ox = it.x + it.w / 2 - cx, oy = it.y + it.h / 2 - cy;
+                const along = dx ? ox * dx : oy * dy;
+                if (along <= 0) continue;
+                const sc = along + 2 * (dx ? Math.abs(oy) : Math.abs(ox));
+                if (sc < bs) { bs = sc; best = it; }
+            }
+            if (best) select(best.n);
+        }
+
+        function tabSibling(dir) {
+            S.lastPointer = false;
+            const n = S.sel;
+            if (!n || n === S.view) { move(1, 0); return; }
+            const sibs = n.parent.children.filter(c => visible(c) && val(c) > 0).sort((a, b) => val(b) - val(a));
+            const i = sibs.indexOf(n);
+            const next = sibs[(i + dir + sibs.length) % sibs.length];
+            if (next) select(next);
+        }
+
+        function setMode(m) {
+            S.mode = m;
+            document.querySelectorAll('#modes button').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
+            refresh();
+        }
+
+        function setHidden(on) {
+            S.showHidden = on;
+            $('#hidden').checked = on;
+            if (!on && S.view) {
+                let v = S.view;
+                while (v.hid) v = v.parent;
+                if (v !== S.view) S.view = v;
+                if (S.sel && S.sel.hid) S.sel = S.view;
+            }
+            refresh();
+        }
+
+        function setDepth(d) {
+            S.maxDepth = Math.max(1, Math.min(8, d));
+            $('#depthv').textContent = S.maxDepth;
+            relayout();
+            draw();
+        }
+
+        // pointer
+        function hit(x, y) {
+            for (let i = items.length - 1; i >= 0; i--) {
+                const it = items[i];
+                if (x >= it.x && x < it.x + it.w && y >= it.y && y < it.y + it.h) return it;
+            }
+            return null;
+        }
+        const local = e => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+
+        const tip = $('#tip');
+        function hideTip() { tip.hidden = true; }
+        function showTip(it, e) {
+            const n = it.n;
+            let html;
+            if (n.rest) html = `<b>${esc(n.name)}</b> <span class="m">· ${fmtB(n.size)} · ${fmtN(n.files)} files</span><div class="p">too small to draw here</div>`;
+            else html = `<b>${esc(n.name)}</b> <span class="m">· ${fmtB(sizeOf(n))}${n.isDir ? ` · ${fmtN(filesOf(n))} files` : ''} · ${fmtAgo(n.mtime)}</span><div class="p">${esc(pathOf(n))}</div>`;
+            tip.innerHTML = html;
+            tip.hidden = false;
+            const tw = tip.offsetWidth, th = tip.offsetHeight;
+            let x = e.clientX + 14, y = e.clientY + 16;
+            if (x + tw > innerWidth - 8) x = e.clientX - tw - 14;
+            if (y + th > innerHeight - 8) y = e.clientY - th - 12;
+            tip.style.left = x + 'px';
+            tip.style.top = y + 'px';
+        }
+
+        cv.addEventListener('mousemove', e => {
+            if (anim) return;
+            const [x, y] = local(e);
+            const it = hit(x, y);
+            S.lastPointer = true;
+            if (it !== S.hover) { S.hover = it; queueDraw(); }
+            if (it && !coarse.matches) showTip(it, e); else hideTip();
+            cv.style.cursor = it ? 'pointer' : 'default';
+        });
+        cv.addEventListener('mouseleave', () => { S.hover = null; hideTip(); queueDraw(); });
+        const coarse = matchMedia('(pointer: coarse)');
+        cv.addEventListener('click', e => {
+            const it = hit(...local(e));
+            if (!it) return;
+            if (e.metaKey || e.ctrlKey) { if (!it.n.rest) toggleMark(it.n); return; }
+            const n = it.n.rest ? it.n.parent : it.n;
+            const sel = S.sel;
+            if (coarse.matches && sel !== S.view && (n === sel || isAncestor(n, sel) || isAncestor(sel, n))) {
+                // tapping the selection again goes one level down, towards it
+                const deep = isAncestor(sel, n) ? n : sel;
+                let step = deep;
+                while (step.parent && step.parent !== S.view) step = step.parent;
+                if (step.isDir) navigate(step, deep);
+                return;
+            }
+            select(n);
+        });
+        cv.addEventListener('dblclick', e => {
+            const it = hit(...local(e));
+            if (!it) return;
+            const n = it.n.rest ? it.n.parent : (it.n.isDir ? it.n : it.n.parent);
+            navigate(n);
+        });
+        cv.addEventListener('contextmenu', e => {
+            // right-click goes up, like a back button for the mosaic
+            e.preventDefault();
+            up();
+        });
+
+        // keyboard
+        document.addEventListener('keydown', e => {
+            if (document.querySelector('dialog[open]')) return;
+            const inFilter = e.target === $('#filter');
+            if (inFilter) {
+                if (e.key === 'Escape') { $('#filter').value = ''; setFilter(''); $('#filter').blur(); }
+                if (e.key === 'Enter') $('#filter').blur();
+                return;
+            }
+            if (e.metaKey || e.ctrlKey || e.altKey) return;
+            if (S.scanning) {
+                if (e.key === 'Escape') stopScan();
+                return;
+            }
+            if (!S.root) {
+                if (e.key === 'o') pickFolder();
+                return;
+            }
+            const k = e.key;
+            let handled = true;
+            switch (k) {
+                case ' ': case 'x': toggleMark(keyTarget()); break;
+                case 'Enter': { const t = keyTarget(); if (t) navigate(t.isDir ? t : t.parent); break; }
+                case 'Backspace': up(); break;
+                case 'Escape':
+                    if (S.filter) { $('#filter').value = ''; setFilter(''); }
+                    else if (!$('#start').hidden && S.root) $('#start').hidden = true;
+                    else up();
+                    break;
+                case 'ArrowLeft': case 'h': move(-1, 0); break;
+                case 'ArrowRight': case 'l': move(1, 0); break;
+                case 'ArrowUp': case 'k': move(0, -1); break;
+                case 'ArrowDown': case 'j': move(0, 1); break;
+                case 'Tab': tabSibling(e.shiftKey ? -1 : 1); break;
+                case '[': setDepth(S.maxDepth - 1); break;
+                case ']': setDepth(S.maxDepth + 1); break;
+                case '/': $('#filter').focus(); break;
+                case 'c': openReview(); break;
+                case 't': setMode({ size: 'files', files: 'age', age: 'size' }[S.mode]); break;
+                case 'i': setHidden(!S.showHidden); break;
+                case '0': navigate(S.root); break;
+                case 'r': rescan(); break;
+                case 'o': $('#start').hidden = false; break;
+                case '?': $('#help').showModal(); break;
+                default: handled = false;
+            }
+            if (handled) e.preventDefault();
+        });
+
+        function setFilter(v) {
+            S.filter = v.trim().toLowerCase();
+            relayout();
+            draw();
+            renderTotals();
+        }
+        $('#filter').addEventListener('input', e => setFilter(e.target.value));
+
+        // top bar
+        $('#modes').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setMode(b.dataset.mode); });
+        $('#hidden').addEventListener('change', e => setHidden(e.target.checked));
+        $('#depthm').addEventListener('click', () => setDepth(S.maxDepth - 1));
+        $('#depthp').addEventListener('click', () => setDepth(S.maxDepth + 1));
+        $('#openBtn').addEventListener('click', () => { $('#start').hidden = false; });
+        $('#home').addEventListener('click', e => { e.preventDefault(); if (S.root) navigate(S.root); });
+
+        // status line
+        let toastUntil = 0;
+        function status() {
+            const el = $('#status');
+            if (performance.now() < toastUntil) return;
+            el.classList.remove('flash');
+            if (!S.root) { el.textContent = ''; return; }
+            const entries = fmtN(S.root.files + S.root.dirs);
+            const secs = ((S.scanning ? performance.now() - S.t0 : S.took) / 1000).toFixed(1);
+            el.textContent = S.scanning ? `scanning… ${entries} entries · ${secs} s` : `scan ${entries} entries · ${secs} s`;
+        }
+        function toast(msg) {
+            const el = $('#status');
+            el.textContent = msg;
+            el.classList.add('flash');
+            toastUntil = performance.now() + 3500;
+            setTimeout(status, 3600);
+        }
+
+        // ───────────────────────── review & delete ─────────────────────────
+
+        let rvNodes = [];
+        function openReview() {
+            renderReview();
+            $('#review').showModal();
+        }
+        function renderReview() {
+            rvNodes = [...S.marks].sort((a, b) => b.size - a.size);
+            const total = rvNodes.reduce((a, n) => a + n.size, 0);
+            $('#rvList').innerHTML = rvNodes.length
+                ? rvNodes.map((n, i) => `<div class="rv"><div>${esc(n.name)}${n.isDir ? '/' : ''}<div class="p">${esc(pathOf(n))}</div></div>
+                    <div>${fmtB(n.size)}</div><button class="ghost" data-unmark="${i}">Unmark</button></div>`).join('')
+                : `<p class="empty">Nothing marked yet. Point at a tile and press <kbd>space</kbd>.</p>`;
+            $('#rvTotal').textContent = rvNodes.length ? `${rvNodes.length} item${rvNodes.length === 1 ? '' : 's'} · ${fmtB(total)} back` : '';
+            const del = $('#rvDelete');
+            del.disabled = !rvNodes.length || S.source === 'upload';
+            del.textContent = S.source === 'demo' ? 'Delete (pretend)…' : 'Delete permanently…';
+            del.title = S.source === 'upload' ? 'A folder listing is read-only. Use “Open a folder” in a Chromium browser to delete.' : '';
+        }
+        $('#rvList').addEventListener('click', e => {
+            const b = e.target.closest('[data-unmark]');
+            if (!b) return;
+            S.marks.delete(rvNodes[+b.dataset.unmark]);
+            renderReview();
+            drawScene(bctx, true);
+            draw();
+            renderPanel();
+        });
+        document.querySelectorAll('dialog [data-close]').forEach(b => b.addEventListener('click', () => b.closest('dialog').close()));
+
+        $('#rvDelete').addEventListener('click', async () => {
+            const list = [...S.marks];
+            if (!list.length || S.source === 'upload') return;
+            const total = list.reduce((a, n) => a + n.size, 0);
+            if (S.source === 'fs') {
+                let perm;
+                try {
+                    perm = await S.rootHandle.requestPermission({ mode: 'readwrite' });
+                } catch (e) { perm = 'denied'; }
+                if (perm !== 'granted') { toast('No write permission, nothing deleted'); return; }
+            }
+            const what = S.source === 'demo' ? 'Pretend to delete' : 'Permanently delete';
+            const warn = S.source === 'demo' ? '(This is demo data, nothing real is touched.)' : 'This skips the trash and cannot be undone.';
+            if (!confirm(`${what} ${list.length} item${list.length === 1 ? '' : 's'} (${fmtB(total)})?\n\n${list.slice(0, 8).map(n => '• ' + pathOf(n)).join('\n')}${list.length > 8 ? '\n…' : ''}\n\n${warn}`)) return;
+            let ok = 0, freed = 0;
+            const failed = [];
+            for (const n of list) {
+                try {
+                    if (S.source === 'fs') await n.parent.handle.removeEntry(n.name, { recursive: n.isDir });
+                    freed += n.size;
+                    removeNode(n);
+                    ok++;
+                } catch (e) {
+                    failed.push(n.name);
+                    console.error('delete failed', pathOf(n), e);
+                }
+            }
+            $('#review').close();
+            computeWorth();
+            refresh();
+            toast(failed.length ? `Removed ${ok}, ${failed.length} failed (${failed.slice(0, 2).join(', ')}) · ${fmtB(freed)} back`
+                : `Removed ${ok} item${ok === 1 ? '' : 's'} · ${fmtB(freed)} back`);
+        });
+
+        // ───────────────────────── start screen ─────────────────────────
+
+        const hasFS = 'showDirectoryPicker' in window;
+        if (!hasFS) {
+            $('#pickFs').disabled = true;
+            $('#pickFsNote').textContent = 'Needs the File System Access API (Chrome, Edge, Arc, Brave…). Use the folder listing below instead.';
+        }
+        $('#pickFs').addEventListener('click', pickFolder);
+        $('#pickUpload').addEventListener('click', () => $('#uploadInput').click());
+        $('#uploadInput').addEventListener('change', e => { scanUpload(e.target.files); e.target.value = ''; });
+        $('#pickDemo').addEventListener('click', genDemo);
+        function stopScan() {
+            if (!S.scanning || S.source === 'demo') return;
+            S.stop = true;
+            toast('Stopped early: totals only cover what was scanned');
+        }
+        $('#ldStop').addEventListener('click', stopScan);
+        $('#start').addEventListener('click', e => { if (e.target.id === 'start' && S.root) $('#start').hidden = true; });
+
+        const stage = $('#stage');
+        stage.addEventListener('dragover', e => { e.preventDefault(); $('#start').hidden = false; $('#start').classList.add('drag'); });
+        stage.addEventListener('dragleave', e => { if (!stage.contains(e.relatedTarget)) $('#start').classList.remove('drag'); });
+        stage.addEventListener('drop', async e => {
+            e.preventDefault();
+            $('#start').classList.remove('drag');
+            const item = [...e.dataTransfer.items].find(i => i.kind === 'file');
+            if (item && item.getAsFileSystemHandle) {
+                const h = await item.getAsFileSystemHandle();
+                if (h && h.kind === 'directory') { scanFS(h); return; }
+            }
+            toast(hasFS ? 'Drop a folder, not a file' : 'Dropping needs a Chromium browser, use “Read a folder listing”');
+        });
+
+        renderLegend();
+        renderPanel();
+        // sizemap/#demo opens straight into the generated folder, handy for sharing
+        if (location.hash === '#demo') genDemo();
+    </script>
+</body>
+
+</html>
